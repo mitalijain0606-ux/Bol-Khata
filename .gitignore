@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+backend/.env
+backend/data/
+backend/app/audio/
+
+# Node
+node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
