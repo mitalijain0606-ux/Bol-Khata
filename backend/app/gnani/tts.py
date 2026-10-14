@@ -1,11 +1,10 @@
-"""Gnani Timbre v2.5 TTS wrapper.
+"""Gnani Timbre v2.5 TTS wrapper — exact API per docs.gnani.ai/api/TTS.
 
-Real-mode surface per docs.gnani.ai:
-  - REST : POST {GNANI_API_BASE}{GNANI_TTS_REST_PATH}   -> audio bytes
-  - SSE  : streaming
-  - WS   : lowest-latency realtime
-Supports 10+ Indic languages, SSML, correct lakh/crore numerals.
-Voice IDs come from the Timbre voice catalog (env-configured).
+REST : POST {base}/api/v1/tts/inference
+       {text, model: timbre-v2.5, voice: <name>, language, speed, audio_config}
+       -> raw audio bytes (wav).
+Voice catalog (v2.5, 42 voices): Poorvi = Hinglish, Deepak/Nalini = Hindi,
+Kaveri = English. v3.0 voices speak all 10 languages.
 """
 import httpx
 
@@ -13,14 +12,23 @@ from app.config import settings
 from app.gnani.stt import ProviderNotConfigured
 
 
-async def synthesize(text: str, voice_id: str = "", lang: str = "hi-IN") -> bytes:
-    """Return audio bytes (content-type preserved by caller)."""
+async def synthesize(text: str, voice: str = "", lang: str = "hi-IN") -> bytes:
+    """Return audio bytes (wav)."""
     if not settings.tts_configured:
         raise ProviderNotConfigured("Gnani key missing — frontend uses browser TTS in Mock Mode")
     payload = {
         "text": text,
-        "voice_id": voice_id or settings.tts_voice_agent,
+        "model": settings.tts_model,
+        "voice": voice or settings.tts_voice_agent,
         "language": lang,
+        "speed": 1.0,
+        "audio_config": {
+            "sample_rate": 16000,
+            "num_channels": 1,
+            "sample_width": 2,
+            "encoding": "linear_pcm",
+            "container": "wav",
+        },
     }
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(

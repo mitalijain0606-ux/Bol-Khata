@@ -18,19 +18,20 @@ def _env(key: str, default: str = "") -> str:
 
 
 class Settings:
-    # --- Gnani platform ---
+    # --- Gnani platform (exact paths per docs.gnani.ai quick-start) ---
     gnani_api_key: str = _env("GNANI_API_KEY_ID")
     gnani_base: str = _env("GNANI_API_BASE", "https://api.vachana.ai") or "https://api.vachana.ai"
-    stt_rest_path: str = _env("GNANI_STT_REST_PATH", "/v1/speech/to/text")
-    stt_ws_path: str = _env("GNANI_STT_WS_PATH", "/v1/speech/to/text/ws")
-    tts_rest_path: str = _env("GNANI_TTS_REST_PATH", "/v1/text/to/speech")
-    tts_ws_path: str = _env("GNANI_TTS_WS_PATH", "/v1/text/to/speech/ws")
-    tts_voice_agent: str = _env("GNANI_TTS_VOICE_AGENT")
+    stt_rest_path: str = _env("GNANI_STT_REST_PATH", "/stt/v3")
+    stt_ws_path: str = _env("GNANI_STT_WS_PATH", "/stt/v3/stream")
+    tts_rest_path: str = _env("GNANI_TTS_REST_PATH", "/api/v1/tts/inference")
+    tts_ws_path: str = _env("GNANI_TTS_WS_PATH", "/api/v1/tts")
+    tts_model: str = _env("GNANI_TTS_MODEL", "timbre-v2.5")
+    tts_voice_agent: str = _env("GNANI_TTS_VOICE_AGENT", "Poorvi")  # Hinglish voice
     tts_voice_customers: list[str] = [
         v for v in (
-            _env("GNANI_TTS_VOICE_CUSTOMER_1"),
-            _env("GNANI_TTS_VOICE_CUSTOMER_2"),
-            _env("GNANI_TTS_VOICE_CUSTOMER_3"),
+            _env("GNANI_TTS_VOICE_CUSTOMER_1", "Deepak"),
+            _env("GNANI_TTS_VOICE_CUSTOMER_2", "Nalini"),
+            _env("GNANI_TTS_VOICE_CUSTOMER_3", "Kaveri"),
         ) if v
     ]
     stt_lang: str = _env("GNANI_STT_LANG", "hi-IN")

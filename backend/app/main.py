@@ -197,8 +197,8 @@ def briefing():
 @app.get("/api/tts")
 async def tts_proxy(text: str, voice: str = "", lang: str = "hi-IN"):
     try:
-        audio = await tts.synthesize(text, voice_id=voice, lang=lang)
-        return Response(content=audio, media_type="audio/mpeg")
+        audio = await tts.synthesize(text, voice=voice, lang=lang)
+        return Response(content=audio, media_type="audio/wav")
     except ProviderNotConfigured:
         return JSONResponse({"detail": "mock-mode: use browser speechSynthesis"}, status_code=204)
     except Exception as e:
@@ -262,9 +262,8 @@ async def ws_voice(ws: WebSocket):
 
             if (data := msg.get("bytes")) is not None and settings.stt_configured:
                 if prisma_ws is None:
-                    url = settings.gnani_base.replace("https", "wss").replace("http", "ws") + settings.stt_ws_path
-                    import websockets
-                    prisma_ws = await websockets.connect(url, extra_headers={"X-API-Key-ID": settings.gnani_api_key})
+                    from app.gnani.stt import open_stream
+                    prisma_ws = await open_stream()
                 await prisma_ws.send(data)
                 try:
                     partial = await asyncio_wait_for(prisma_ws.recv(), timeout=0.5)
