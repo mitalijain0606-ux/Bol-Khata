@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
-import { speak, startListening, stopSpeaking, speechSupported } from "../voice.js";
+import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaPrisma } from "../voice.js";
 
 const EXAMPLES = [
   "Sharma ji ko do hazaar ka udhaar lagana",
@@ -17,6 +17,7 @@ export default function Khata({ gnani, onNav }) {
   const [totals, setTotals] = useState(null);
   const [busy, setBusy] = useState(false);
   const logRef = useRef(null);
+  const recRef = useRef(null);
 
   const refreshFeed = () => {
     api.entries(12).then(setEntries).catch(() => {});
@@ -47,15 +48,38 @@ export default function Khata({ gnani, onNav }) {
   };
 
   const toggleMic = () => {
-    if (listening) {
+    // stop-path: recording chal rahi hai -> roko aur Prisma ko bhejo
+    if (recRef.current) {
+      const r = recRef.current;
+      recRef.current = null;
       setListening(false);
+      setHeard("Prisma sun raha hai…");
+      r.stop()
+        .then((wav) => transcribeViaPrisma(wav))
+        .then((d) => {
+          if (d.transcript) processUtterance(d.transcript);
+          else { setHeard(""); say("Awaz clear nahi aayi — dobara boliye.", "agent"); }
+        })
+        .catch((e) => { setHeard(""); say("STT fail: " + e.message, "agent"); });
       return;
     }
+
+    stopSpeaking();
+    if (gnani && navigator.mediaDevices?.getUserMedia) {
+      // Gnani Mode: mic -> Prisma
+      setListening(true);
+      setHeard("sun raha hoon… (bol ke dobara dabaao)");
+      startRecording()
+        .then((r) => { recRef.current = r; })
+        .catch((e) => { setListening(false); setHeard(""); say("Mic nahi khula: " + e.message, "agent"); });
+      return;
+    }
+
+    // Mock Mode: browser speech recognition
     if (!speechSupported()) {
       say("Is browser me mic-sunne ki suvidha nahi — Chrome ya Edge use kariye.", "agent");
       return;
     }
-    stopSpeaking();
     setListening(true);
     setHeard("sun raha hoon...");
     startListening(

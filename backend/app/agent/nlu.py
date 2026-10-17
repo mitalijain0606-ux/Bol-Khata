@@ -12,6 +12,46 @@ import re
 
 from app.agent import tools as T
 
+# ---- Devanagari -> roman (for Prisma transcripts) ----
+# Prisma returns native-script text (ITN numerals included). The rule brain is
+# roman-Hinglish, so we transliterate with a deliberate 'a'-friendly mapping:
+# ा→a (not aa) keeps 'sharma' as 'sharma', 'udhaar' as 'udhaar'.
+_DEV = {
+    # consonants
+    "क": "k", "ख": "kh", "ग": "g", "घ": "gh", "ङ": "n",
+    "च": "ch", "छ": "chh", "ज": "j", "झ": "jh", "ञ": "n",
+    "ट": "t", "ठ": "th", "ड": "d", "ढ": "dh", "ण": "n",
+    "त": "t", "थ": "th", "द": "d", "ध": "dh", "न": "n",
+    "प": "p", "फ": "ph", "ब": "b", "भ": "bh", "म": "m",
+    "य": "y", "र": "r", "ल": "l", "व": "v", "श": "sh", "ष": "sh",
+    "स": "s", "ह": "h", "ळ": "l",
+    "क़": "q", "ख़": "kh", "ग़": "g", "ज़": "z", "ड़": "r", "ढ़": "rh", "फ़": "f",
+    # independent vowels (kept short to match ledger spellings)
+    "अ": "a", "आ": "a", "इ": "i", "ई": "i", "उ": "u", "ऊ": "u",
+    "ए": "e", "ऐ": "ai", "ओ": "o", "औ": "au", "ऋ": "ri",
+    # matras & marks
+    "ा": "a", "ि": "i", "ी": "i", "ु": "u", "ू": "u",
+    "े": "e", "ै": "ai", "ो": "o", "ौ": "au",
+    "ं": "n", "ँ": "n", "ः": "h", "्": "", "़": "",
+    # Devanagari digits -> ascii
+    "०": "0", "१": "1", "२": "2", "३": "3", "४": "4",
+    "५": "5", "६": "6", "७": "7", "८": "8", "९": "9",
+    "।": ".", "॥": ".",
+}
+
+
+def transliterate(text: str) -> str:
+    if not any(ch in _DEV for ch in text):
+        return text
+    return "".join(_DEV.get(ch, ch) for ch in text)
+
+
+def fuzz(token: str) -> str:
+    """Collapse doubled vowels so 'raajesh'~'rajesh', 'sharmaa'~'sharma'."""
+    t = token.lower().strip(".,?!।")
+    return re.sub(r"([a-z])\1{1,}", r"\1", t)
+
+
 NUM_WORDS = {
     "ek": 1, "do": 2, "teen": 3, "char": 4, "chaar": 4, "paanch": 5, "panch": 5,
     "cheh": 6, "chhe": 6, "satt": 7, "saat": 7, "aath": 8, "nau": 9, "das": 10,
@@ -84,15 +124,17 @@ def parse_amount(text: str) -> float | None:
 
 
 def find_customer_name(text: str, known_names: list[str]) -> str:
-    """Match a known customer name in the utterance — token-aware:
-    'Sharma ji ko udhaar' should match stored name 'Rajesh Sharma'."""
-    t = text.lower()
-    t_clean = re.sub(r"\b(ji|bhai|bhaiya|seth|sahab)\b", "", t)
+    """Match a known customer name in the utterance — token-aware + vowel-fuzzy:
+    'Sharma ji ko udhaar' matches 'Rajesh Sharma'; 'raajesh' matches 'Rajesh'
+    (Prisma transliterations double vowels)."""
+    t = re.sub(r"\b(ji|bhai|bhaiya|seth|sahab)\b", "", text.lower())
+    t_fuzz = fuzz(t)
     best, best_len = "", 0
     for name in known_names:
         for tok in name.lower().split():
-            if len(tok) > 2 and tok in t_clean and len(tok) > best_len:
-                best, best_len = name, len(tok)
+            ftok = fuzz(tok)
+            if len(ftok) > 2 and ftok in t_fuzz and len(ftok) > best_len:
+                best, best_len = name, len(ftok)
     if best:
         return best
     m = re.search(r"(?:^|\s)([a-z\u0900-\u097F]{2,15}(?:\s(?:ji|bhai|bhaiya|seth|sahab))?)\s+(?:ko|ne|se|ka|ki|kaa)\b", t)

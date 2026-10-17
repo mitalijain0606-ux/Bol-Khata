@@ -20,6 +20,8 @@ export default function CallScreen({ gnani }) {
   const logRef = useRef(null);
   const autoRef = useRef(true);
   const callIdRef = useRef(null);
+  const custVoiceRef = useRef("Deepak");
+  const CUST_VOICES = ["Deepak", "Nalini", "Kaveri"];
 
   useEffect(() => {
     api.customers().then((cs) => setCustomers(cs.filter((c) => c.balance > 0))).catch(() => {});
@@ -35,15 +37,17 @@ export default function CallScreen({ gnani }) {
   const speakSeq = (who, text) =>
     new Promise((res) => {
       setSpeaking(who);
-      // customer voices: pitch per persona so awaaz alag lage
-      const pitch = who === "agent" ? 1 : 0.82;
+      // Gnani Timbre voices: agent = Poorvi (server default), customer = rotation
+      // (pitch/rate only affect the browser-TTS fallback in mock mode)
+      const gnaniVoice = who === "agent" ? "" : custVoiceRef.current;
       speak(text, {
-        pitch,
+        voice: gnaniVoice,
+        pitch: who === "agent" ? 1 : 0.82,
         rate: who === "agent" ? 1.02 : 0.95,
         onEnd: () => setTimeout(() => { setSpeaking(""); res(); }, 250),
       });
-      // safety: agar TTS fail ho jaye (silent browsers), 4.5s me aage badho
-      setTimeout(() => res(), 4500);
+      // safety: agar TTS fail ho jaye (silent browsers), 12s me aage badho
+      setTimeout(() => res(), 12000);
     });
 
   const startCall = async (c) => {
@@ -51,6 +55,7 @@ export default function CallScreen({ gnani }) {
     const res = await api.callStart(c.id);
     setCall(res);
     callIdRef.current = res.call_id;
+    custVoiceRef.current = CUST_VOICES[c.id % CUST_VOICES.length];
     setBubbles([]);
     setResult(null);
     setPhase("live");

@@ -166,6 +166,20 @@ class UtterIn(BaseModel):
     text: str
 
 
+@app.post("/api/stt")
+async def stt_proxy(file: UploadFile = File(...), lang: str = ""):
+    """Mic audio (wav, recorded+encoded in browser) -> Gnani Prisma -> transcript."""
+    try:
+        audio = await file.read()
+        text = await stt.transcribe_clip(audio, lang=lang)
+        return {"transcript": text, "provider": "prisma"}
+    except ProviderNotConfigured:
+        return {"transcript": "", "provider": "mock"}
+    except Exception as e:
+        log.warning("STT proxy failed: %s", e)
+        raise HTTPException(502, str(e))
+
+
 @app.post("/api/voice/command")
 async def voice_command(u: UtterIn):
     """Free-path brain (rule engine) — deterministic, used by Mock Mode too."""

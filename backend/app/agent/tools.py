@@ -20,30 +20,32 @@ def get_shopkeeper(conn, shopkeeper_id: int = 1):
 def find_customer(conn, name: str, shopkeeper_id: int = 1):
     """'Sharma ji' spoken -> matches 'Rajesh Sharma' in the ledger.
 
-    People say surnames + honorifics, the khata stores full names — so match
-    on any significant token instead of the exact string.
-    """
+    People say surnames + honorifics, the khata stores full names — so match on
+    any significant token, with doubled vowels collapsed (Prisma transcripts
+    transliterate to 'raajesh'/'sharmaa'-style spellings)."""
+    from app.agent.nlu import fuzz
+
     q = name.strip().lower()
     if not q:
         return None
-    tokens = [t for t in re.split(r"[\s.]+", q) if t and t not in HONORIFICS]
-    if not tokens:
-        tokens = [q]
+    rows = conn.execute(
+        "SELECT * FROM customer WHERE shopkeeper_id = ? ORDER BY id", (shopkeeper_id,)
+    ).fetchall()
+
     # best first: full spoken string inside a stored name
-    row = conn.execute(
-        "SELECT * FROM customer WHERE shopkeeper_id = ? AND INSTR(LOWER(name), ?) > 0 LIMIT 1",
-        (shopkeeper_id, q),
-    ).fetchone()
-    if row:
-        return row
-    # then: any significant token
-    for tok in sorted(tokens, key=len, reverse=True):
-        row = conn.execute(
-            "SELECT * FROM customer WHERE shopkeeper_id = ? AND INSTR(LOWER(name), ?) > 0 LIMIT 1",
-            (shopkeeper_id, tok),
-        ).fetchone()
-        if row:
-            return row
+    for r in rows:
+        if q in r["name"].lower():
+            return r
+
+    tokens = [fuzz(t) for t in re.split(r"[\s.]+", q) if t and t not in HONORIFICS]
+    if not tokens:
+        tokens = [fuzz(q)]
+    for tok in sorted(set(tokens), key=len, reverse=True):
+        if len(tok) < 3:
+            continue
+        for r in rows:
+            if tok in fuzz(r["name"]):
+                return r
     return None
 
 

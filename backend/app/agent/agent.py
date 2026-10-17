@@ -119,6 +119,7 @@ def run_tool(name: str, args: dict, transcript: str = "") -> dict:
 # ---------------- rule-engine path (Mock Mode brain) ----------------
 
 def rule_reply(text: str) -> dict:
+    text = nlu.transliterate(text)  # Prisma transcripts arrive in Devanagari
     intent = nlu.classify(text)
     amount = nlu.parse_amount(text)
     with db() as conn:
