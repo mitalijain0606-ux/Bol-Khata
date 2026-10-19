@@ -3,7 +3,7 @@ import { api } from "../api.js";
 import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaPrisma } from "../voice.js";
 
 const LANGS = [
-  { code: "hi-IN", label: "हिंदी", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
+  { code: "hi-IN", label: "Hinglish", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
   { code: "mr-IN", label: "मराठी", ex: "राजेश शर्मा ला 2,000 चा उधार लावा" },
   { code: "ta-IN", label: "தமிழ்", ex: "ராஜேஷ் 2,000 கடன் பதிவு செய்" },
 ];

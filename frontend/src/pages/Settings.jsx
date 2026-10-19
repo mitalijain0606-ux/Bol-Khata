@@ -54,12 +54,6 @@ export default function Settings({ me, onSaved, onLogout }) {
         {enrollState && <div style={{ marginTop: 10, fontSize: 13 }}>{enrollState}</div>}
       </div>
 
-      <div className="card" style={{ fontSize: 12.5, color: "var(--muted)" }}>
-        🔒 Privacy: is app ka saara data demo ke liye banaya gaya hai — fake naam,
-        fake numbers, banavati awaazein. Koi real personal data use nahi hota.
-        Aapka account aapke number + password se surakshit hai — sirf aap khul sakte hain.
-      </div>
-
       <button className="btn ghost" style={{ width: "100%", color: "var(--red)" }} onClick={onLogout}>
         Logout
       </button>
