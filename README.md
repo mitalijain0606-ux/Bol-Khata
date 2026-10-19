@@ -1,88 +1,111 @@
 # Bol-Khata 🎤📕
 
-**"Khata ko awaaz do, awaaz ko yaaddasht, aur yaaddasht se ek credit manager."**
+**A voice-first AI credit manager for India's kirana stores — built on Gnani AI's Prisma, Timbre, and Evon.**
 
-Dukaandaar ka AI manager — **bolke khata** likhta hai, bolke sawaal-sunta hai, due waale
-customers ko **khud call karke paise ka wada** tulwaata hai, ledger ko **malik ki awaaz se
-lock** rakhta hai, aur har customer ka **Bharaut-Score** bana ke batata hai kise udhaar dena
-chahiye.
-
-> Great Indian AI Internship Challenge entry — built on Gnani AI (Prisma v2.5 · Timbre v2.5 ·
-> Evon v3.3). Solo build. 100% synthetic data (DPDP-safe) — fake naam, fake numbers,
-> banavati awaazein.
+> Entry for the **Great Indian AI Internship Challenge** (Gnani AI) — theme: *Build Sovereign AI for India*.
+> Trilingual (Hindi · Marathi · Tamil) · 100% synthetic data (DPDP-safe) · Solo build.
 
 ---
 
-## Zero-cost dual mode (ya hi iska best feature hai)
+## The Problem
 
-| | Mock Mode (default) | Gnani Mode |
+A typical kirana store has **₹40,000–50,000 stuck in informal credit (udhaar)** at any time. Three stacked problems:
+
+1. **Bookkeeping friction** — the owner's hands are busy all day; typing entries into an app mid-sale never happens. Entries get missed, disputes follow.
+2. **Money recovery** — chasing repayments is awkward and unstructured. Customers say *"kal pakka"* ("tomorrow, promise") and nobody tracks whether the promise was kept.
+3. **Credit trust** — these customers have no credit history. Every *"should I lend ₹5,000 more?"* decision is memory and gut feeling.
+
+Existing apps (Khatabook, OkCredit) digitized the notebook — **problem #1 only**. The money leaks in #2 and #3, and nobody solves those *by voice*.
+
+## The Solution
+
+**Bol-Khata is not an assistant — it's an employee.** It doesn't wait to be asked; it makes the calls, records the promises, and follows up.
+
+| | Feature | What it does |
 |---|---|---|
-| STT | Browser SpeechRecognition (Chrome, free) | **Gnani Prisma v2.5** streaming WS |
-| TTS | Browser speechSynthesis (free) | **Gnani Timbre v2.5** (Indic voices) |
-| Brain | Hinglish rule engine (offline, deterministic) | **Gnani Evon v3.3** tool-calling |
-| Cost | ₹0, aaj hi demo-ready | Free programme credits (5,000/registrant) |
+| 🎤 | **Voice ledger** | Speak in Hinglish: *"Sharma ji ko do hazaar paanch sau ka udhaar lagana"* → the entry writes itself (Hindi number words, honorific-aware name matching, ₹2,500). Queries too: *"kitna baki hai?"*, *"aaj ka hisaab"*. |
+| 📞 | **Collections agent** | Proactively *calls* customers with overdue balances, listens to excuses, pushes back (harder if they broke a previous promise), and extracts a **promise-to-pay date** — tracked against actual payments. Three synthetic debtor personas make the demo repeatable. |
+| 📊 | **Bharaut-Score** | Explainable per-customer trust score: broken promise −25 · late payment −10 · stale balance −5 · kept promise +5. Full breakdown in the UI — a shopkeeper only trusts a score he can audit. |
+| 🌅 | **Morning briefing** | A spoken daily report: totals, nearest promise due, who broke a promise, how many calls to make today. |
+| 🔒 | **Voice lock** | Owner enrolls ~5s of speech (ECAPA-TDNN embeddings, CPU). Destructive ledger actions require the owner's verified voice. |
+| 🌍 | **Trilingual** | Hindi/Hinglish, Marathi, and Tamil — speech in, native-script replies out, in the same language. |
+| 🔬 | **Noise harness** | Generates noisy test audio (0/5/10 dB SNR) and measures ASR word-error-rate — robustness as a chart, not a claim. |
 
-`.env` me `GNANI_API_KEY_ID` bharo → restart → Settings page me sab **ACTIVE**.
-Code same rehta hai — sirf providers switch hote hain.
+## Where Gnani's models plug in
 
-## Features
+| Model | Role | Integration |
+|---|---|---|
+| **Prisma v2.5** (STT) | Hears the shopkeeper & call audio — code-mixed speech, telephony-grade | REST `POST /stt/v3` + streaming `wss://…/stt/v3/stream` (16-bit PCM), auto ITN numerals → *verified roundtrip with Timbre* |
+| **Timbre v2.5** (TTS) | Speaks — agent uses **Poorvi (Hinglish voice)**; debtors use Deepak/Nalini/Kaveri; auto voice-pick for Marathi/Tamil | REST `POST /api/v1/tts/inference`, 16 kHz WAV |
+| **Evon v3.3** (reasoning) | Thinks — tool-calling over the ledger (`add_entry`, `query_balance`, `log_promise`, `briefing`, `trust_score`) | OpenAI-compatible chat endpoint / HF open weights (Apache 2.0); deterministic Hinglish rule-engine fallback keeps the loop alive |
 
-1. **Bolke khata** — "Sharma ji ko do hazaar paanch sau ka udhaar" → entry (Hinglish number
-   words parse hote hain), "kitna baki hai", "aaj ka hisaab" — sab voice.
-2. **Vasooli call agent** — due waale customer pe tap karo; agent khud negotiate karta hai,
-   excuse sunta hai, **wada ki date leta hai**, ledger me promise likhta hai.
-   3 synthetic debtor personas: Pakka-wala 🙂, Talne-wala 😬, Bhav-taai-wala 🤝.
-3. **Awaaz ka lock** — owner voice enroll (SpeechBrain ECAPA-TDNN, CPU pe free);
-   delete/settle sirf owner ki awaaz pe (ARMour angle).
-4. **Bharaut-Score** — explainable: wada toda −25, der se payment −10, purana baki −5,
-   poora wada +5 (max +20). Breakdown UI me dikhta hai (ATLAS angle).
-5. **Subah ki briefing** — AI manager ka morning report, bolke suna sakta hai.
-6. **Noise test harness** — noisy-telephony test set generator + WER report
-   (`python -m scripts.make_noisy_testset`) (Noise Canceller angle).
+## Architecture
 
-## Run (2 minute)
+```
+Phone / Laptop (React PWA)
+        ⇅  WebSocket / REST
+FastAPI backend
+ ├── Speech layer ……… Gnani Prisma STT   (fallback: browser SpeechRecognition)
+ ├── Brain ………………… Gnani Evon tools   (fallback: Hinglish rule engine + NLU)
+ ├── Ledger tools ……… SQLite: entries, customers, promises, calls, scores
+ ├── Call simulator …… 3 debtor personas, promise lifecycle, analytics
+ └── Voice out ………… Gnani Timbre TTS   (fallback: browser speechSynthesis)
+```
+
+**Dual-mode by design:** every external capability has a free fallback, so the app runs at zero cost and never breaks on stage; setting `GNANI_API_KEY_ID` in `.env` switches the whole stack to Gnani with no code changes.
+
+## Quick start
 
 ```bash
-# Backend
+# Backend (Python 3.11+)
 cd backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m scripts.seed_fake_data        # fake dukaan + 12 customers
+.venv/bin/python -m scripts.seed_fake_data     # fake shop + 12 customers + history
 .venv/bin/uvicorn app.main:app --port 8000
 
-# Frontend
+# Frontend (Node 18+)
 cd ../frontend
-npm install && npm run build                      # backend dist/ serve karta hai
+npm install && npm run build                   # backend serves the built PWA
 
-# Browser (Chrome) -> http://localhost:8000
+# Open http://localhost:8000 in Chrome (allow mic)
 ```
 
-Optional voice lock: `pip install speechbrain torchaudio` (CPU chalega).
+Runs immediately in **Mock Mode** (free, no keys). Optional voice lock: `pip install speechbrain torchaudio`.
 
-Phone pe demo: `cloudflared tunnel --url http://localhost:8000` → phone me kholo →
-"Add to Home Screen" → PWA app ban jaata hai.
+### Switching to Gnani Mode
 
-## Gnani Mode switch (jab keys milein)
+1. Copy `backend/.env.example` → `backend/.env`
+2. Set `GNANI_API_KEY_ID=<your key from app.gnani.ai>`
+3. Run `.venv/bin/python -m scripts.health_check` → all pings green
+4. Restart — the header chip shows **Gnani Prisma·Timbre·Evon**
 
-1. `backend/.env` banao (`backend/.env.example` copy karo)
-2. `GNANI_API_KEY_ID=` (app.gnani.ai dashboard se)
-3. Quickstart (docs.gnani.ai) se exact endpoint paths confirm karke paths update karo
-4. Evon: open-weights request approve hone par `EVON_HF_MODEL=` ya kisi compatible
-   endpoint pe `EVON_API_URL=`
-5. `.venv/bin/python -m scripts.health_check` → teeno pings green
-6. Restart → Settings me sab ACTIVE
+Evon activates when `EVON_API_URL` (OpenAI-compatible endpoint) or `EVON_HF_MODEL` (Hugging Face open weights) is set.
 
-## Repo map
+## How it works inside (highlights)
 
-```
-backend/app/       FastAPI: main.py (routes+WS), agent/ (brain+call sim),
-                   gnani/ (Prisma/Timbre/Evon wrappers), analytics/, voiceid/
-backend/scripts/   seed_fake_data · health_check · make_noisy_testset
-frontend/src/      pages: Khata (voice ledger) · CallScreen · Dashboard · Settings
-docs/              PLAN.md · demo-run-sheet.md · video-script.md
-```
+- **Hinglish NLU** — Hindi number-word composition (sau/hazaar/lakh), date parsing (*kal, parso, "15 tareekh", agle somvar* → ISO dates), honorific-stripping name matcher with vowel-fuzzy + consonant-skeleton matching so Devanagari/Tamil transcripts still resolve roman ledger names.
+- **Promise lifecycle** — `PENDING → KEPT` (auto-settled when a payment arrives) `→ BROKEN` (due date passed) → feeds the trust score and the *tone* of the next collection call.
+- **Call analytics** — every simulated call persists transcript, summary, sentiment, excuse type, outcome; a partial payment mid-call becomes a real ledger entry.
+- **Every entry stores the raw spoken sentence** — an audit trail from any dashboard number back to the voice that created it.
 
 ## Privacy
 
-Poora data synthetic hai — DPDP Act ke hisaab se koi real phone number, Aadhaar, PAN,
-ya recorded call use nahi hota. Debtor "calls" banavati awaaz ke saath app ke andar
-simulate hote hain.
+Zero real personal data: fake names, fake phone numbers, synthesized voices, in-app simulated calls. Complies with the challenge's DPDP rule and makes demos infinitely repeatable.
+
+## Repository map
+
+```
+backend/app/
+  main.py            FastAPI routes + voice WebSocket
+  agent/             NLU, brain (rules + Evon), collections call simulator
+  gnani/             Prisma STT · Timbre TTS · Evon wrappers
+  analytics/         Bharaut-Score, morning briefing
+  voiceid/           speaker verification (ECAPA-TDNN)
+backend/scripts/     seed_fake_data · health_check · make_noisy_testset
+frontend/src/pages/  Khata (voice ledger) · CallScreen · Dashboard · Settings
+docs/                plan, project explanation, video script, demo run-sheet
+```
+
+---
+
+*Bol-Khata — give the khata a voice, the voice a memory, and the memory a credit score.*
