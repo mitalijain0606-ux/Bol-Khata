@@ -7,6 +7,9 @@ import CallScreen from "./pages/CallScreen.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Settings from "./pages/Settings.jsx";
 
+const THEME_KEY = "bolkhata_theme";
+const applyTheme = (t) => document.body.classList.toggle("light", t === "light");
+
 const TABS = [
   { key: "khata", ic: "🎤", label: "Khata" },
   { key: "call", ic: "📞", label: "Calls" },
@@ -18,6 +21,12 @@ export default function App() {
   const [authed, setAuthed] = useState(null); // null=checking, false=login, obj=shopkeeper
   const [tab, setTab] = useState("khata");
   const [health, setHealth] = useState(null);
+  const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "dark");
+
+  useEffect(() => {
+    applyTheme(theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ providers: {} }));
@@ -27,6 +36,8 @@ export default function App() {
       setAuthed(false);
     }
   }, []);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
 
   const refreshMe = () => api.me().then(setAuthed).catch(() => {});
 
@@ -39,7 +50,14 @@ export default function App() {
     return <div className="auth-wrap"><div className="auth-hero"><div className="logo-big">ब</div><h1>Bol-Khata</h1></div></div>;
   }
   if (authed === false) {
-    return <Auth onLogin={refreshMe} />;
+    return (
+      <>
+        <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
+        <Auth onLogin={refreshMe} />
+      </>
+    );
   }
 
   const live = health?.providers?.stt;
@@ -54,8 +72,13 @@ export default function App() {
             <small>{authed.shop_name || authed.name}</small>
           </div>
         </div>
-        <div className="live-chip">
-          <span className="dot" /> {live ? "AI Live" : "AI Ready"}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="live-chip">
+            <span className="dot" /> {live ? "AI Live" : "AI Ready"}
+          </div>
+          <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
         </div>
       </header>
 
