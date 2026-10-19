@@ -10,7 +10,7 @@ product still works end-to-end at zero cost.
 import httpx
 
 from app.config import settings
-from app.gnani.stt import ProviderNotConfigured
+from app.speech.stt import ProviderNotConfigured
 
 SYSTEM_PROMPT = (
     "Tum 'Bol-Khata' ho — ek kirana dukaan ke malik ka AI manager. Tum Hinglish "

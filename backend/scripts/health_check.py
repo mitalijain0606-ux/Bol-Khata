@@ -20,8 +20,8 @@ def tiny_wav(seconds: float = 0.6) -> bytes:
 
 async def main():
     from app.config import settings
-    from app.gnani import stt, tts
-    from app.gnani.evon import chat as evon_chat
+    from app.speech import stt, tts
+    from app.speech.evon import chat as evon_chat
 
     print(f"Mode: {settings.mode.upper()}")
     print(f"STT configured : {settings.stt_configured}")

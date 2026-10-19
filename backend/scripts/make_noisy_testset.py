@@ -79,7 +79,7 @@ async def main():
     # 1) generate test set (Timbre when configured, placeholder otherwise)
     for s_i, sent in enumerate(SENTENCES):
         if settings.tts_configured:
-            from app.gnani.tts import synthesize
+            from app.speech.tts import synthesize
             speech = await synthesize(sent)
             path = OUT / f"utt_{s_i}_clean.wav"
             path.write_bytes(speech)
@@ -93,7 +93,7 @@ async def main():
 
     # 2) WER eval (needs Gnani key; skip otherwise)
     if settings.stt_configured:
-        from app.gnani.stt import transcribe_clip
+        from app.speech.stt import transcribe_clip
         def wer(ref: str, hyp: str):
             r, h = ref.lower().split(), hyp.lower().split()
             import difflib

@@ -124,12 +124,11 @@ Run `.venv/bin/python -m scripts.health_check` to verify provider connectivity.
 backend/app/
   main.py            FastAPI routes, auth, voice WebSocket
   agent/             NLU, brain (rules + tool-calling), collections simulator
-  gnani/             STT / TTS / LLM provider wrappers
+  speech/            STT / TTS / LLM provider wrappers
   analytics/         Bharaut-Score, morning briefing
   voiceid/           speaker verification
 backend/scripts/     seed · health check · noise test set
 frontend/src/pages/  Auth · Khata · CallScreen · Dashboard · Settings
-docs/                plan, project explanation, demo run-sheet
 ```
 
 ## Notes & limitations

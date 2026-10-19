@@ -21,8 +21,8 @@ from app.analytics import trust_score
 from app.analytics.briefing import build_briefing
 from app.config import settings
 from app.db import db, init_schema
-from app.gnani import stt, tts
-from app.gnani.stt import ProviderNotConfigured
+from app.speech import stt, tts
+from app.speech.stt import ProviderNotConfigured
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bolkhata")
@@ -362,7 +362,7 @@ async def ws_voice(ws: WebSocket):
 
             if (data := msg.get("bytes")) is not None and settings.stt_configured:
                 if prisma_ws is None:
-                    from app.gnani.stt import open_stream
+                    from app.speech.stt import open_stream
                     prisma_ws = await open_stream()
                 await prisma_ws.send(data)
                 try:

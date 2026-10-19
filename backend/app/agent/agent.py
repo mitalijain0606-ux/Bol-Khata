@@ -9,8 +9,8 @@ import logging
 from app.agent import nlu, tools as T
 from app.analytics import trust_score
 from app.db import db
-from app.gnani import evon
-from app.gnani.stt import ProviderNotConfigured
+from app.speech import evon
+from app.speech.stt import ProviderNotConfigured
 
 log = logging.getLogger("bolkhata.agent")
 

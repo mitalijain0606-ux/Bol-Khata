@@ -12,3 +12,7 @@ frontend/dist/
 
 # OS
 .DS_Store
+
+# local planning/notes (not part of the public project)
+PLAN.md
+docs/

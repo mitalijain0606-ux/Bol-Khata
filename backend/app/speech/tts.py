@@ -9,7 +9,7 @@ Kaveri = English. v3.0 voices speak all 10 languages.
 import httpx
 
 from app.config import settings
-from app.gnani.stt import ProviderNotConfigured
+from app.speech.stt import ProviderNotConfigured
 
 
 async def synthesize(text: str, voice: str = "", lang: str = "hi-IN") -> bytes:
