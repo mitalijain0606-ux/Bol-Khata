@@ -144,9 +144,9 @@ export function stopSpeaking() {
   }
 }
 
-export function speak(text, { voice = "", pitch = 1, rate = 1, onEnd } = {}) {
+export function speak(text, { voice = "", lang = "hi-IN", pitch = 1, rate = 1, onEnd } = {}) {
   // 1) Gnani Timbre (backend proxies; returns audio/wav in Gnani mode)
-  fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`)
+  fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`)
     .then(async (r) => {
       if (r.status === 204 || !r.ok) throw new Error("no timbre");
       const blob = await r.blob();

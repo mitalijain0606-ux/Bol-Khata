@@ -75,6 +75,17 @@ body {
 .stat .num.amber { color: var(--amber2); }
 .stat .num.green { color: var(--green); }
 
+/* ---------- language chips ---------- */
+.lang-row { display: flex; gap: 8px; justify-content: center; margin: 2px 0 8px; }
+.lang-chip {
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.18); color: var(--muted);
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+}
+.lang-chip.active {
+  background: linear-gradient(140deg, var(--amber2), var(--amber)); color: #1c1204;
+  border-color: transparent; font-weight: 700;
+}
+
 /* ---------- mic orb ---------- */
 .mic-wrap { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; }
 .mic-orb {

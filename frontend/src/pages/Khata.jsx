@@ -2,11 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaPrisma } from "../voice.js";
 
-const EXAMPLES = [
-  "Sharma ji ko do hazaar ka udhaar lagana",
-  "Gupta ji ne paanch sau diye",
-  "Verma ji ka kitna baki hai",
-  "Aaj ka hisaab",
+const LANGS = [
+  { code: "hi-IN", label: "हिंदी", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
+  { code: "mr-IN", label: "मराठी", ex: "राजेश शर्मा ला 2,000 चा उधार लावा" },
+  { code: "ta-IN", label: "தமிழ்", ex: "ராஜேஷ் 2,000 கடன் பதிவு செய்" },
 ];
 
 export default function Khata({ gnani, onNav }) {
@@ -16,6 +15,7 @@ export default function Khata({ gnani, onNav }) {
   const [entries, setEntries] = useState([]);
   const [totals, setTotals] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [lang, setLang] = useState("hi-IN");
   const logRef = useRef(null);
   const recRef = useRef(null);
 
@@ -37,9 +37,9 @@ export default function Khata({ gnani, onNav }) {
     setBusy(true);
     say(text, "you");
     try {
-      const res = await api.command(text); // rule brain; Evon upgrades this server-side
+      const res = await api.command(text, lang); // rule brain; Evon upgrades this server-side
       say(res.reply, "agent");
-      speak(res.reply, { pitch: 1, rate: 1.02 });
+      speak(res.reply, { lang, pitch: 1, rate: 1.02 });
       if (["ENTRY_ADDED", "SETTLED"].includes(res.action)) refreshFeed();
     } catch (e) {
       say("Server se baat nahi ho payi — backend chal raha hai?", "agent");
@@ -55,7 +55,7 @@ export default function Khata({ gnani, onNav }) {
       setListening(false);
       setHeard("Prisma sun raha hai…");
       r.stop()
-        .then((wav) => transcribeViaPrisma(wav))
+        .then((wav) => transcribeViaPrisma(wav, lang))
         .then((d) => {
           if (d.transcript) processUtterance(d.transcript);
           else { setHeard(""); say("Awaz clear nahi aayi — dobara boliye.", "agent"); }
@@ -89,7 +89,7 @@ export default function Khata({ gnani, onNav }) {
         if (final) processUtterance(final);
         else setHeard("");
       },
-      "hi-IN"
+      lang
     );
   };
 
@@ -111,6 +111,16 @@ export default function Khata({ gnani, onNav }) {
           </div>
         </div>
 
+        <div className="lang-row">
+          {LANGS.map((l) => (
+            <button key={l.code}
+                    className={"lang-chip" + (lang === l.code ? " active" : "")}
+                    onClick={() => setLang(l.code)}>
+              {l.label}
+            </button>
+          ))}
+        </div>
+
         <div className="mic-wrap">
           <button className={"mic-orb" + (listening ? " listening" : "")} onClick={toggleMic} disabled={busy}>
             {listening ? "◼" : "🎤"}
@@ -129,12 +139,26 @@ export default function Khata({ gnani, onNav }) {
           {log.length === 0 && (
             <div className="empty">
               Mic dabao aur bolo. Jaise:<br />
-              {EXAMPLES.map((e) => (
-                <button key={e} className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
-                        onClick={() => processUtterance(e)}>
-                  “{e}”
-                </button>
-              ))}
+              <button className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
+                      onClick={() => processUtterance(LANGS.find(l => l.code === lang).ex)}>
+                “{LANGS.find(l => l.code === lang).ex}”
+              </button>
+              {lang === "hi-IN" && (
+                <>
+                  <button className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
+                          onClick={() => processUtterance("Gupta ji ne paanch sau diye")}>
+                    “Gupta ji ne paanch sau diye”
+                  </button>
+                  <button className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
+                          onClick={() => processUtterance("Verma ji ka kitna baki hai")}>
+                    “Verma ji ka kitna baki hai”
+                  </button>
+                  <button className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
+                          onClick={() => processUtterance("Aaj ka hisaab")}>
+                    “Aaj ka hisaab”
+                  </button>
+                </>
+              )}
             </div>
           )}
           {log.map((m, i) => (

@@ -164,6 +164,7 @@ def totals():
 
 class UtterIn(BaseModel):
     text: str
+    lang: str = "hi-IN"
 
 
 @app.post("/api/stt")
@@ -183,13 +184,13 @@ async def stt_proxy(file: UploadFile = File(...), lang: str = ""):
 @app.post("/api/voice/command")
 async def voice_command(u: UtterIn):
     """Free-path brain (rule engine) — deterministic, used by Mock Mode too."""
-    return rule_reply(u.text)
+    return rule_reply(u.text, u.lang)
 
 
 @app.post("/api/voice/agent")
 async def voice_agent(u: UtterIn):
     """Full brain: Evon if configured, rules otherwise."""
-    return await handle_utterance(u.text)
+    return await handle_utterance(u.text, u.lang)
 
 
 # ---------------- trust scores / briefing ----------------

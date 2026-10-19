@@ -116,47 +116,88 @@ def run_tool(name: str, args: dict, transcript: str = "") -> dict:
     return {"reply": "Samajh nahi aaya, dobara boliye.", "action": "UNKNOWN", "data": {}}
 
 
-# ---------------- rule-engine path (Mock Mode brain) ----------------
+# ---------------- rule-engine path (Mock/Gnani brain) ----------------
 
-def rule_reply(text: str) -> dict:
-    text = nlu.transliterate(text)  # Prisma transcripts arrive in Devanagari
-    intent = nlu.classify(text)
-    amount = nlu.parse_amount(text)
+# Replies for Marathi / Tamil in native script (Timbre speaks them natively).
+REPLIES = {
+    "mr-IN": {
+        "add": "{name} वर {amt} ची नोंद लावली. एकूण बाकी {bal}.",
+        "pay": "नोंद झाली — {name} चे {amt} पेमेंट. बाकी आता {bal}.",
+        "balance": "{name} ची एकूण बाकी {amt} आहे.",
+        "totals": "आजचा उधार {u}, रोख आली {c}. एकूण उधार {t}.",
+        "need_amount": "कितीचा उधार लावायचा? रक्कम सांगा.",
+        "need_name": "कोणाच्या नावावर लिहायची? नाव सांगा.",
+        "unknown": "समजले नाही, पुन्हा सांगा.",
+    },
+    "ta-IN": {
+        "add": "{name} க்கு {amt} கடன் பதிவு செய்யப்பட்டது. மொத்த பாக்கி {bal}.",
+        "pay": "பதிவு ஆனது — {name} {amt} செலுத்தினார். பாக்கி இப்போது {bal}.",
+        "balance": "{name} மொத்த பாக்கி {amt}.",
+        "totals": "இன்றைய கடன் {u}, வரவு {c}. மொத்த கடன் {t}.",
+        "need_amount": "எவ்வளவு கடன் சேர்க்கவேண்டும்? தொகையை சொல்லுங்கள்.",
+        "need_name": "யார் பெயரில் எழுதவேண்டும்? பெயரை சொல்லுங்கள்.",
+        "unknown": "புரியவில்லை, மீண்டும் சொல்லுங்கள்.",
+    },
+}
+
+
+def _reply(lang: str, key: str, **kw) -> str:
+    tpl = REPLIES.get(lang, {}).get(key)
+    return tpl.format(**kw) if tpl else ""
+
+
+def rule_reply(text: str, lang: str = "hi-IN") -> dict:
+    text = nlu.transliterate(text)  # Prisma transcripts arrive in native scripts
+    intent = nlu.classify(text, lang)
+    amount = nlu.parse_amount(text, lang)
+    native = lang in REPLIES  # Marathi/Tamil reply in native script for Timbre
     with db() as conn:
         known = [r["name"] for r in conn.execute("SELECT name FROM customer").fetchall()]
         name = nlu.find_customer_name(text, known)
 
         if intent == "PAYMENT":
             if not amount:
-                return {"reply": "Kitne ka payment aaya? Amount bol dijiye.", "action": "NEED_AMOUNT", "data": {}}
+                return {"reply": _reply(lang, "need_amount") or "Kitne ka payment aaya? Amount bol dijiye.",
+                        "action": "NEED_AMOUNT", "data": {}}
             cust = T.find_or_create_customer(conn, name) if name else None
             if not cust:
                 return {"reply": "Kis customer ne diye? Naam bhi bol dijiye.", "action": "NEED_NAME", "data": {}}
             T.add_entry(conn, cust["id"], "PAYMENT", amount, nlu.items_from(text), text)
             T.settle_due_promises(conn, cust["id"], amount)
             bal = T.customer_balance(conn, cust["id"])
-            return {"reply": f"Note ho gaya — {cust['name']} ka payment {T.fmt_money(amount)}. "
-                             f"Bakipada ab {T.fmt_money(bal)}.",
+            reply = _reply(lang, "pay", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
+            return {"reply": reply or f"Note ho gaya — {cust['name']} ka payment {T.fmt_money(amount)}. "
+                                     f"Bakipada ab {T.fmt_money(bal)}.",
                     "action": "ENTRY_ADDED",
                     "data": {"customer": cust["name"], "amount": amount, "kind": "PAYMENT", "balance": bal}}
 
         if intent == "ADD_UDHAAR":
             if not amount:
-                return {"reply": "Kitne ka udhaar lagana hai? Amount boliye.", "action": "NEED_AMOUNT", "data": {}}
+                return {"reply": _reply(lang, "need_amount") or "Kitne ka udhaar lagana hai? Amount boliye.",
+                        "action": "NEED_AMOUNT", "data": {}}
             if not name:
-                return {"reply": "Kiske naam pe likhna hai? Customer ka naam boliye.", "action": "NEED_NAME", "data": {}}
+                return {"reply": _reply(lang, "need_name") or "Kiske naam pe likhna hai? Customer ka naam boliye.",
+                        "action": "NEED_NAME", "data": {}}
             cust = T.find_or_create_customer(conn, name)
             T.add_entry(conn, cust["id"], "UDHAAR", amount, nlu.items_from(text), text)
             bal = T.customer_balance(conn, cust["id"])
-            return {"reply": f"{cust['name']} par {T.fmt_money(amount)} ka udhaar likh diya. "
-                             f"Total bakipada {T.fmt_money(bal)}.",
+            reply = _reply(lang, "add", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
+            return {"reply": reply or f"{cust['name']} par {T.fmt_money(amount)} ka udhaar likh diya. "
+                                      f"Total bakipada {T.fmt_money(bal)}.",
                     "action": "ENTRY_ADDED",
                     "data": {"customer": cust["name"], "amount": amount, "kind": "UDHAAR", "balance": bal}}
 
         if intent == "QUERY_BALANCE":
             if not name:
-                return {"reply": "Kis ka baki dekhna hai? Naam boliye.", "action": "NEED_NAME", "data": {}}
-            return run_tool("query_balance", {"customer_name": name})
+                return {"reply": _reply(lang, "need_name") or "Kis ka baki dekhna hai? Naam boliye.",
+                        "action": "NEED_NAME", "data": {}}
+            cust = T.find_customer(conn, name)
+            if not cust:
+                return {"reply": f"{name} khata me nahi hai.", "action": "NOT_FOUND", "data": {}}
+            bal = T.customer_balance(conn, cust["id"])
+            reply = _reply(lang, "balance", name=cust["name"], amt=T.fmt_money(bal))
+            return {"reply": reply or f"{cust['name']} ka total bakipada {T.fmt_money(bal)} hai.",
+                    "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
 
         if intent == "SETTLE":
             if not name:
@@ -174,6 +215,11 @@ def rule_reply(text: str) -> dict:
         if intent == "BRIEFING":
             return run_tool("briefing", {})
         if intent == "TOTALS":
+            if native:
+                tot = T.totals(conn)
+                return {"reply": _reply(lang, "totals", u=T.fmt_money(tot["udhaar_today"]),
+                                        c=T.fmt_money(tot["cash_in_today"]), t=T.fmt_money(tot["udhaar_total"])),
+                        "action": "TOTALS", "data": tot}
             return run_tool("totals_today", {})
         if intent == "LIST_DUES":
             return run_tool("list_dues", {})
@@ -181,8 +227,9 @@ def rule_reply(text: str) -> dict:
             return run_tool("trust_score", {"customer_name": name})
 
     return {
-        "reply": "Ye main samajh nahi paaya. Bol dijiye jaise: "
-                 "'Sharma ji ko do hazaar ka udhaar', 'kitna baki hai', ya 'aaj ka hisaab'.",
+        "reply": _reply(lang, "unknown") or
+                 ("Ye main samajh nahi paaya. Bol dijiye jaise: "
+                  "'Sharma ji ko do hazaar ka udhaar', 'kitna baki hai', ya 'aaj ka hisaab'."),
         "action": "UNKNOWN",
         "data": {"heard": text},
     }
@@ -222,13 +269,13 @@ async def evon_reply(text: str) -> dict | None:
         return None
 
 
-async def handle_utterance(text: str) -> dict:
+async def handle_utterance(text: str, lang: str = "hi-IN") -> dict:
     """Main entry: brain decides who answers."""
     if evon_settings_ready():
         result = await evon_reply(text)
         if result:
             return {**result, "brain": "evon"}
-    return {**rule_reply(text), "brain": "rules"}
+    return {**rule_reply(text, lang), "brain": "rules"}
 
 
 def evon_settings_ready() -> bool:

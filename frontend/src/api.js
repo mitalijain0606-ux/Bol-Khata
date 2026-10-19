@@ -22,14 +22,14 @@ export const api = {
   briefing: () => fetch("/api/briefing").then(j),
 
   // rule-engine brain (works offline/mock) and full brain (Evon when configured)
-  command: (text) =>
+  command: (text, lang = "hi-IN") =>
     fetch("/api/voice/command", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, lang }),
     }).then(j),
 
   tts: (text, voice = "", lang = "hi-IN") =>
-    fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${voice}&lang=${lang}`),
+    fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`),
 
   // collections call simulator
   callStart: (cid) => fetch(`/api/call/start/${cid}`, { method: "POST" }).then(j),
