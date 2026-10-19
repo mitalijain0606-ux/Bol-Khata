@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS shopkeeper (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   shop_name TEXT DEFAULT '',
+  phone TEXT DEFAULT '',
+  password_hash TEXT DEFAULT '',
   language_pref TEXT DEFAULT 'hi-IN',
   voice_profile_path TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now', 'localtime'))
@@ -103,3 +105,8 @@ def db():
 def init_schema():
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        # migrate existing DBs: add auth columns if missing
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(shopkeeper)").fetchall()}
+        for col, decl in (("phone", "TEXT DEFAULT ''"), ("password_hash", "TEXT DEFAULT ''")):
+            if col not in cols:
+                conn.execute(f"ALTER TABLE shopkeeper ADD COLUMN {col} {decl}")

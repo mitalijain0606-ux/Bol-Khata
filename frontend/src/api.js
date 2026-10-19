@@ -1,45 +1,64 @@
-// Tiny API layer — everything talks to the FastAPI backend.
+// Tiny API layer — attaches the session token to every call.
+const TOKEN_KEY = "bolkhata_token";
+export const getToken = () => localStorage.getItem(TOKEN_KEY);
+export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+
 const j = async (r) => {
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  if (r.status === 401) {
+    clearToken();
+    window.location.reload(); // session expired -> back to login
+    throw new Error("logged out");
+  }
+  if (!r.ok) {
+    let detail = `${r.status}`;
+    try { detail = (await r.json()).detail || detail; } catch {}
+    throw new Error(detail);
+  }
   return r.status === 204 ? null : r.json();
 };
 
+const authHeaders = () => {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+};
+const post = (url, body) =>
+  fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body),
+  }).then(j);
+const get = (url) => fetch(url, { headers: authHeaders() }).then(j);
+
 export const api = {
-  health: () => fetch("/api/health").then(j),
-  shopkeeper: () => fetch("/api/shopkeeper").then(j),
+  // ---- auth ----
+  login: (phone, password) => post("/api/auth/login", { phone, password }),
+  register: (name, shop_name, phone, password) =>
+    post("/api/auth/register", { name, shop_name, phone, password }),
+  me: () => get("/api/auth/me"),
 
-  customers: () => fetch("/api/customers").then(j),
-  ledger: (cid) => fetch(`/api/customers/${cid}/ledger`).then(j),
-  addCustomer: (name, persona = "", phone = "") =>
-    fetch("/api/customers", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, persona, phone }),
-    }).then(j),
+  health: () => get("/api/health"),
+  shopkeeper: () => get("/api/shopkeeper"),
 
-  entries: (limit = 30) => fetch(`/api/entries?limit=${limit}`).then(j),
-  totals: () => fetch("/api/totals").then(j),
-  trustScores: () => fetch("/api/trust-scores").then(j),
-  briefing: () => fetch("/api/briefing").then(j),
+  customers: () => get("/api/customers"),
+  ledger: (cid) => get(`/api/customers/${cid}/ledger`),
 
-  // rule-engine brain (works offline/mock) and full brain (Evon when configured)
-  command: (text, lang = "hi-IN") =>
-    fetch("/api/voice/command", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, lang }),
-    }).then(j),
+  entries: (limit = 30) => get(`/api/entries?limit=${limit}`),
+  totals: () => get("/api/totals"),
+  trustScores: () => get("/api/trust-scores"),
+  briefing: () => get("/api/briefing"),
+
+  // rule-engine brain (free) — Evon upgrades server-side
+  command: (text, lang = "hi-IN") => post("/api/voice/command", { text, lang }),
 
   tts: (text, voice = "", lang = "hi-IN") =>
     fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`),
 
   // collections call simulator
-  callStart: (cid) => fetch(`/api/call/start/${cid}`, { method: "POST" }).then(j),
-  callStep: (id) => fetch(`/api/call/${id}/step`, { method: "POST" }).then(j),
-  callSay: (id, text) =>
-    fetch(`/api/call/${id}/say`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    }).then(j),
-  callEnd: (id) => fetch(`/api/call/${id}/end`, { method: "POST" }).then(j),
+  callStart: (cid) => fetch(`/api/call/start/${cid}`, { method: "POST", headers: authHeaders() }).then(j),
+  callStep: (id) => fetch(`/api/call/${id}/step`, { method: "POST", headers: authHeaders() }).then(j),
+  callSay: (id, text) => post(`/api/call/${id}/say`, { text }),
+  callEnd: (id) => fetch(`/api/call/${id}/end`, { method: "POST", headers: authHeaders() }).then(j),
 
   enroll: (sid, blob) => {
     const fd = new FormData();

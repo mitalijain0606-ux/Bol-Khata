@@ -95,8 +95,10 @@ def compute(conn, customer_id: int) -> dict:
     }
 
 
-def all_scores(conn) -> list[dict]:
+def all_scores(conn, shopkeeper_id: int = 1) -> list[dict]:
     out = []
-    for row in conn.execute("SELECT id FROM customer ORDER BY id").fetchall():
+    for row in conn.execute(
+        "SELECT id FROM customer WHERE shopkeeper_id = ? ORDER BY id", (shopkeeper_id,)
+    ).fetchall():
         out.append(compute(conn, row["id"]))
     return sorted(out, key=lambda x: x["score"], reverse=True)

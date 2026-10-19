@@ -1,18 +1,22 @@
-"""Bol-Khata API — REST + WebSocket voice loop.
+"""Bol-Khata API — REST + WebSocket voice loop + phone/password auth.
 
   uvicorn app.main:app --reload --port 8000   (from backend/)
 """
+import asyncio
 import json
 import logging
+import re
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app import auth
 from app.agent import call_sim, tools as T
-from app.agent.agent import handle_utterance, rule_reply
+from app.agent.agent import handle_utterance, rule_reply, run_tool
 from app.analytics import trust_score
 from app.analytics.briefing import build_briefing
 from app.config import settings
@@ -23,7 +27,7 @@ from app.gnani.stt import ProviderNotConfigured
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("bolkhata")
 
-app = FastAPI(title="Bol-Khata", version="1.0.0")
+app = FastAPI(title="Bol-Khata", version="1.1.0")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
 )
@@ -34,7 +38,75 @@ def startup():
     init_schema()
 
 
-# ---------------- health / mode ----------------
+def _sid(request: Request) -> int:
+    """Shopkeeper id from the Bearer token (falls back to the seeded account)."""
+    return auth.sid_from_token(request.headers.get("authorization")) or 1
+
+
+# ---------------- auth ----------------
+
+class RegisterIn(BaseModel):
+    name: str
+    shop_name: str = ""
+    phone: str
+    password: str
+
+
+class LoginIn(BaseModel):
+    phone: str
+    password: str
+
+
+def _clean_phone(p: str) -> str:
+    digits = re.sub(r"\D", "", p or "")
+    return digits[-10:] if len(digits) >= 10 else ""
+
+
+@app.post("/api/auth/register")
+def register(r: RegisterIn):
+    phone = _clean_phone(r.phone)
+    if not phone:
+        raise HTTPException(400, "Sahi 10-digit phone number daaliye")
+    if len(r.password or "") < 4:
+        raise HTTPException(400, "Password kam se kam 4 character ka rakhiye")
+    with db() as conn:
+        existing = conn.execute("SELECT id FROM shopkeeper WHERE phone = ?", (phone,)).fetchone()
+        if existing:
+            raise HTTPException(409, "Ye number pehle se registered hai — login kijiye")
+        cur = conn.execute(
+            "INSERT INTO shopkeeper (name, shop_name, phone, password_hash) VALUES (?, ?, ?, ?)",
+            (r.name.strip() or "Dukaandaar", r.shop_name.strip(), phone, auth.hash_password(r.password)),
+        )
+        sid = cur.lastrowid
+    return {"token": auth.make_token(sid),
+            "shopkeeper": {"id": sid, "name": r.name, "shop_name": r.shop_name, "phone": phone}}
+
+
+@app.post("/api/auth/login")
+def login(r: LoginIn):
+    phone = _clean_phone(r.phone)
+    with db() as conn:
+        row = conn.execute("SELECT * FROM shopkeeper WHERE phone = ?", (phone,)).fetchone()
+    if not row or not row["password_hash"] or not auth.verify_password(r.password, row["password_hash"]):
+        raise HTTPException(401, "Phone ya password galat hai")
+    return {"token": auth.make_token(row["id"]),
+            "shopkeeper": {"id": row["id"], "name": row["name"], "shop_name": row["shop_name"], "phone": phone}}
+
+
+@app.get("/api/auth/me")
+def me(request: Request):
+    sid = auth.sid_from_token(request.headers.get("authorization"))
+    if not sid:
+        raise HTTPException(401, "not logged in")
+    with db() as conn:
+        row = T.get_shopkeeper(conn, sid)
+    if not row:
+        raise HTTPException(401, "account not found")
+    return {"id": row["id"], "name": row["name"], "shop_name": row["shop_name"],
+            "phone": row["phone"], "voice_enrolled": bool(row["voice_profile_path"])}
+
+
+# ---------------- health ----------------
 
 @app.get("/api/health")
 def health():
@@ -42,9 +114,9 @@ def health():
         "ok": True,
         "mode": settings.mode,
         "providers": {
-            "stt_prisma": settings.stt_configured,
-            "tts_timbre": settings.tts_configured,
-            "evon": settings.evon_configured,
+            "stt": settings.stt_configured,
+            "tts": settings.tts_configured,
+            "brain": settings.evon_configured,
             "voice_lock": settings.voice_lock_enabled,
         },
     }
@@ -53,11 +125,11 @@ def health():
 # ---------------- shopkeeper / voice enroll ----------------
 
 @app.get("/api/shopkeeper")
-def get_shopkeeper():
+def get_shopkeeper(request: Request):
     with db() as conn:
-        s = T.get_shopkeeper(conn)
+        s = T.get_shopkeeper(conn, _sid(request))
         if not s:
-            raise HTTPException(404, "Run seed first: python -m scripts.seed_fake_data")
+            raise HTTPException(404, "Account not found — register first")
         return dict(s)
 
 
@@ -66,9 +138,7 @@ async def enroll_voice(sid: int, file: UploadFile = File(...)):
     from app.voiceid import voiceid
     wav = await file.read()
     res = voiceid.enroll(sid, wav)
-    if not res.get("ok"):
-        return JSONResponse(res, status_code=200)  # graceful: lock offline
-    return res
+    return JSONResponse(res, status_code=200)
 
 
 @app.post("/api/shopkeeper/{sid}/verify-voice")
@@ -87,27 +157,34 @@ class CustomerIn(BaseModel):
 
 
 @app.get("/api/customers")
-def list_customers():
+def list_customers(request: Request):
+    sid = _sid(request)
     with db() as conn:
-        dues = {c["id"]: c for c in T.customers_with_dues(conn)}
-        rows = conn.execute("SELECT * FROM customer ORDER BY name").fetchall()
+        dues = {c["id"]: c for c in T.customers_with_dues(conn, sid)}
+        rows = conn.execute(
+            "SELECT * FROM customer WHERE shopkeeper_id = ? ORDER BY name", (sid,)
+        ).fetchall()
         return [{**dict(r), "balance": dues.get(r["id"], {}).get("balance", 0.0)} for r in rows]
 
 
 @app.post("/api/customers")
-def add_customer(c: CustomerIn):
+def add_customer(c: CustomerIn, request: Request):
+    sid = _sid(request)
     with db() as conn:
-        existing = T.find_customer(conn, c.name)
+        existing = T.find_customer(conn, c.name, sid)
         if existing:
             raise HTTPException(409, f"{c.name} already in khata")
-        row = T.create_customer(conn, c.name, persona=c.persona)
+        row = T.create_customer(conn, c.name, shopkeeper_id=sid, persona=c.persona)
         return dict(row)
 
 
 @app.get("/api/customers/{cid}/ledger")
-def ledger(cid: int):
+def ledger(cid: int, request: Request):
+    sid = _sid(request)
     with db() as conn:
-        cust = conn.execute("SELECT * FROM customer WHERE id=?", (cid,)).fetchone()
+        cust = conn.execute(
+            "SELECT * FROM customer WHERE id = ? AND shopkeeper_id = ?", (cid, sid)
+        ).fetchone()
         if not cust:
             raise HTTPException(404, "customer not found")
         entries = conn.execute(
@@ -137,27 +214,30 @@ class EntryIn(BaseModel):
 
 
 @app.get("/api/entries")
-def entries(limit: int = 30):
+def entries(limit: int = 30, request: Request = None):
     with db() as conn:
-        return [dict(e) for e in T.recent_entries(conn, limit)]
+        return [dict(e) for e in T.recent_entries(conn, limit, _sid(request))]
 
 
 @app.post("/api/entries")
-def add_entry(e: EntryIn):
+def add_entry(e: EntryIn, request: Request):
+    sid = _sid(request)
     with db() as conn:
-        cust = conn.execute("SELECT * FROM customer WHERE id=?", (e.customer_id,)).fetchone()
+        cust = conn.execute(
+            "SELECT * FROM customer WHERE id=? AND shopkeeper_id=?", (e.customer_id, sid)
+        ).fetchone()
         if not cust:
             raise HTTPException(404, "customer not found")
-        T.add_entry(conn, e.customer_id, e.type, e.amount, e.items_text, e.raw_transcript)
+        T.add_entry(conn, e.customer_id, e.type, e.amount, e.items_text, e.raw_transcript, shopkeeper_id=sid)
         if e.type == "PAYMENT":
             T.settle_due_promises(conn, e.customer_id, e.amount)
         return {"ok": True, "balance": T.customer_balance(conn, e.customer_id)}
 
 
 @app.get("/api/totals")
-def totals():
+def totals(request: Request):
     with db() as conn:
-        return T.totals(conn)
+        return T.totals(conn, _sid(request))
 
 
 # ---------------- the brain ----------------
@@ -169,7 +249,7 @@ class UtterIn(BaseModel):
 
 @app.post("/api/stt")
 async def stt_proxy(file: UploadFile = File(...), lang: str = ""):
-    """Mic audio (wav, recorded+encoded in browser) -> Gnani Prisma -> transcript."""
+    """Mic audio (wav, recorded+encoded in browser) -> cloud STT -> transcript."""
     try:
         audio = await file.read()
         text = await stt.transcribe_clip(audio, lang=lang)
@@ -182,32 +262,32 @@ async def stt_proxy(file: UploadFile = File(...), lang: str = ""):
 
 
 @app.post("/api/voice/command")
-async def voice_command(u: UtterIn):
-    """Free-path brain (rule engine) — deterministic, used by Mock Mode too."""
-    return rule_reply(u.text, u.lang)
+async def voice_command(u: UtterIn, request: Request):
+    """Free-path brain (rule engine) — deterministic."""
+    return rule_reply(u.text, u.lang, _sid(request))
 
 
 @app.post("/api/voice/agent")
-async def voice_agent(u: UtterIn):
-    """Full brain: Evon if configured, rules otherwise."""
-    return await handle_utterance(u.text, u.lang)
+async def voice_agent(u: UtterIn, request: Request):
+    """Full brain: cloud reasoning if configured, rules otherwise."""
+    return await handle_utterance(u.text, u.lang, _sid(request))
 
 
 # ---------------- trust scores / briefing ----------------
 
 @app.get("/api/trust-scores")
-def trust_scores():
+def trust_scores(request: Request):
     with db() as conn:
-        return trust_score.all_scores(conn)
+        return trust_score.all_scores(conn, _sid(request))
 
 
 @app.get("/api/briefing")
-def briefing():
+def briefing(request: Request):
     with db() as conn:
-        return build_briefing(conn)
+        return build_briefing(conn, _sid(request))
 
 
-# ---------------- TTS proxy (Gnani Mode) ----------------
+# ---------------- TTS proxy ----------------
 
 @app.get("/api/tts")
 async def tts_proxy(text: str, voice: str = "", lang: str = "hi-IN"):
@@ -224,8 +304,15 @@ async def tts_proxy(text: str, voice: str = "", lang: str = "hi-IN"):
 # ---------------- collections call simulator ----------------
 
 @app.post("/api/call/start/{cid}")
-def call_start(cid: int):
-    res = call_sim.start_call(cid)
+def call_start(cid: int, request: Request):
+    sid = _sid(request)
+    with db() as conn:
+        own = conn.execute(
+            "SELECT 1 FROM customer WHERE id=? AND shopkeeper_id=?", (cid, sid)
+        ).fetchone()
+        if not own:
+            raise HTTPException(404, "customer not found")
+    res = call_sim.start_call(cid, sid)
     if "error" in res:
         raise HTTPException(404, res["error"])
     return res
@@ -259,9 +346,7 @@ def call_end(call_id: int):
     return res
 
 
-# ---------------- realtime voice WS (Gnani streaming path) ----------------
-# Mock Mode frontend sends {"type":"transcript","text":...} (browser STT).
-# Gnani Mode sends binary PCM frames; backend streams to Prisma WS.
+# ---------------- realtime voice WS ----------------
 
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
@@ -281,7 +366,7 @@ async def ws_voice(ws: WebSocket):
                     prisma_ws = await open_stream()
                 await prisma_ws.send(data)
                 try:
-                    partial = await asyncio_wait_for(prisma_ws.recv(), timeout=0.5)
+                    partial = await asyncio.wait_for(prisma_ws.recv(), timeout=0.5)
                     await ws.send_json({"type": "partial", "text": _partial_text(partial)})
                 except TimeoutError:
                     pass
@@ -290,7 +375,7 @@ async def ws_voice(ws: WebSocket):
             if (raw := msg.get("text")) is not None:
                 payload = json.loads(raw)
                 if payload.get("type") == "transcript":
-                    result = await handle_utterance(payload["text"])
+                    result = await handle_utterance(payload["text"], payload.get("lang", "hi-IN"))
                     await ws.send_json({"type": "result", **result})
                 elif payload.get("type") == "flush" and prisma_ws is not None:
                     await prisma_ws.send(json.dumps({"type": "end"}))
@@ -304,13 +389,6 @@ async def ws_voice(ws: WebSocket):
                 await prisma_ws.close()
             except Exception:
                 pass
-
-
-import asyncio  # noqa: E402  (used in ws loop)
-
-
-def asyncio_wait_for(fut, timeout):
-    return asyncio.wait_for(fut, timeout)
 
 
 def _partial_text(raw) -> str:
@@ -328,6 +406,6 @@ def _partial_text(raw) -> str:
 
 # ---------------- serve built frontend (single-server demo) ----------------
 
-FRONTEND_DIST = __import__("pathlib").Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="spa")

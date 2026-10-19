@@ -67,14 +67,14 @@ TOOL_SCHEMA = [
 TOOL_FNS = {"add_entry", "query_balance", "totals_today", "list_dues", "briefing", "trust_score"}
 
 
-def run_tool(name: str, args: dict, transcript: str = "") -> dict:
+def run_tool(name: str, args: dict, transcript: str = "", sid: int = 1) -> dict:
     with db() as conn:
         if name == "add_entry":
-            cust = T.find_or_create_customer(conn, args.get("customer_name", ""))
+            cust = T.find_or_create_customer(conn, args.get("customer_name", ""), shopkeeper_id=sid)
             if not cust or not args.get("amount"):
                 return {"error": "customer ya amount missing"}
             T.add_entry(conn, cust["id"], args.get("kind", "UDHAAR"),
-                        float(args["amount"]), args.get("items_text", ""), transcript)
+                        float(args["amount"]), args.get("items_text", ""), transcript, shopkeeper_id=sid)
             bal = T.customer_balance(conn, cust["id"])
             kind_word = "udhaar lagaya" if args.get("kind") == "UDHAAR" else "paisa jama kiya"
             return {
@@ -85,29 +85,29 @@ def run_tool(name: str, args: dict, transcript: str = "") -> dict:
                          "kind": args.get("kind"), "balance": bal},
             }
         if name == "query_balance":
-            cust = T.find_customer(conn, args.get("customer_name", ""))
+            cust = T.find_customer(conn, args.get("customer_name", ""), sid)
             if not cust:
                 return {"reply": "Ye customer khata me nahi mila. Naam phir se boliye.", "action": "NOT_FOUND", "data": {}}
             bal = T.customer_balance(conn, cust["id"])
             return {"reply": f"{cust['name']} ka total bakipada {T.fmt_money(bal)} hai.",
                     "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
         if name == "totals_today":
-            tot = T.totals(conn)
+            tot = T.totals(conn, sid)
             return {"reply": f"Aaj ka udhaar {T.fmt_money(tot['udhaar_today'])} bana, "
                              f"cash aaya {T.fmt_money(tot['cash_in_today'])}. "
                              f"Kul udhaar abhi {T.fmt_money(tot['udhaar_total'])} par hai.",
                     "action": "TOTALS", "data": tot}
         if name == "list_dues":
-            dues = [c for c in T.customers_with_dues(conn) if c["balance"] > 0]
+            dues = [c for c in T.customers_with_dues(conn, sid) if c["balance"] > 0]
             if not dues:
                 return {"reply": "Aaj sab ka hisaab clear hai — kisi ka udhaar nahi!", "action": "LIST_DUES", "data": []}
             names = ", ".join(f"{c['name']} {T.fmt_money(c['balance'])}" for c in dues[:8])
             return {"reply": f"Ye logon ka udhaar baki hai: {names}.", "action": "LIST_DUES", "data": dues}
         if name == "briefing":
             from app.analytics.briefing import build_briefing
-            return build_briefing(conn)
+            return build_briefing(conn, sid)
         if name == "trust_score":
-            cust = T.find_customer(conn, args.get("customer_name", ""))
+            cust = T.find_customer(conn, args.get("customer_name", ""), sid)
             if not cust:
                 return {"reply": "Ye customer khata me nahi mila.", "action": "NOT_FOUND", "data": {}}
             res = trust_score.compute(conn, cust["id"])
@@ -146,23 +146,24 @@ def _reply(lang: str, key: str, **kw) -> str:
     return tpl.format(**kw) if tpl else ""
 
 
-def rule_reply(text: str, lang: str = "hi-IN") -> dict:
-    text = nlu.transliterate(text)  # Prisma transcripts arrive in native scripts
+def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
+    text = nlu.transliterate(text)  # cloud STT transcripts arrive in native scripts
     intent = nlu.classify(text, lang)
     amount = nlu.parse_amount(text, lang)
-    native = lang in REPLIES  # Marathi/Tamil reply in native script for Timbre
+    native = lang in REPLIES  # Marathi/Tamil reply in native script for the voice
     with db() as conn:
-        known = [r["name"] for r in conn.execute("SELECT name FROM customer").fetchall()]
+        known = [r["name"] for r in conn.execute(
+            "SELECT name FROM customer WHERE shopkeeper_id = ?", (sid,)).fetchall()]
         name = nlu.find_customer_name(text, known)
 
         if intent == "PAYMENT":
             if not amount:
                 return {"reply": _reply(lang, "need_amount") or "Kitne ka payment aaya? Amount bol dijiye.",
                         "action": "NEED_AMOUNT", "data": {}}
-            cust = T.find_or_create_customer(conn, name) if name else None
+            cust = T.find_or_create_customer(conn, name, shopkeeper_id=sid) if name else None
             if not cust:
                 return {"reply": "Kis customer ne diye? Naam bhi bol dijiye.", "action": "NEED_NAME", "data": {}}
-            T.add_entry(conn, cust["id"], "PAYMENT", amount, nlu.items_from(text), text)
+            T.add_entry(conn, cust["id"], "PAYMENT", amount, nlu.items_from(text), text, shopkeeper_id=sid)
             T.settle_due_promises(conn, cust["id"], amount)
             bal = T.customer_balance(conn, cust["id"])
             reply = _reply(lang, "pay", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
@@ -178,8 +179,8 @@ def rule_reply(text: str, lang: str = "hi-IN") -> dict:
             if not name:
                 return {"reply": _reply(lang, "need_name") or "Kiske naam pe likhna hai? Customer ka naam boliye.",
                         "action": "NEED_NAME", "data": {}}
-            cust = T.find_or_create_customer(conn, name)
-            T.add_entry(conn, cust["id"], "UDHAAR", amount, nlu.items_from(text), text)
+            cust = T.find_or_create_customer(conn, name, shopkeeper_id=sid)
+            T.add_entry(conn, cust["id"], "UDHAAR", amount, nlu.items_from(text), text, shopkeeper_id=sid)
             bal = T.customer_balance(conn, cust["id"])
             reply = _reply(lang, "add", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
             return {"reply": reply or f"{cust['name']} par {T.fmt_money(amount)} ka udhaar likh diya. "
@@ -191,7 +192,7 @@ def rule_reply(text: str, lang: str = "hi-IN") -> dict:
             if not name:
                 return {"reply": _reply(lang, "need_name") or "Kis ka baki dekhna hai? Naam boliye.",
                         "action": "NEED_NAME", "data": {}}
-            cust = T.find_customer(conn, name)
+            cust = T.find_customer(conn, name, sid)
             if not cust:
                 return {"reply": f"{name} khata me nahi hai.", "action": "NOT_FOUND", "data": {}}
             bal = T.customer_balance(conn, cust["id"])
@@ -213,18 +214,18 @@ def rule_reply(text: str, lang: str = "hi-IN") -> dict:
                     "action": "SETTLED", "data": {"customer": cust["name"], "balance": 0.0}}
 
         if intent == "BRIEFING":
-            return run_tool("briefing", {})
+            return run_tool("briefing", {}, sid=sid)
         if intent == "TOTALS":
             if native:
                 tot = T.totals(conn)
                 return {"reply": _reply(lang, "totals", u=T.fmt_money(tot["udhaar_today"]),
                                         c=T.fmt_money(tot["cash_in_today"]), t=T.fmt_money(tot["udhaar_total"])),
                         "action": "TOTALS", "data": tot}
-            return run_tool("totals_today", {})
+            return run_tool("totals_today", {}, sid=sid)
         if intent == "LIST_DUES":
-            return run_tool("list_dues", {})
+            return run_tool("list_dues", {}, sid=sid)
         if intent == "SCORE" and name:
-            return run_tool("trust_score", {"customer_name": name})
+            return run_tool("trust_score", {"customer_name": name}, sid=sid)
 
     return {
         "reply": _reply(lang, "unknown") or
@@ -237,7 +238,7 @@ def rule_reply(text: str, lang: str = "hi-IN") -> dict:
 
 # ---------------- Evon path (Gnani Mode brain) ----------------
 
-async def evon_reply(text: str) -> dict | None:
+async def evon_reply(text: str, sid: int = 1) -> dict | None:
     try:
         msgs = [{"role": "user", "content": text}]
         resp = await evon.chat(msgs, tools=TOOL_SCHEMA)
@@ -248,7 +249,7 @@ async def evon_reply(text: str) -> dict | None:
         call = calls[0]
         fn = call["function"]["name"]
         args = json.loads(call["function"].get("arguments") or "{}")
-        result = run_tool(fn, args, transcript=text)
+        result = run_tool(fn, args, transcript=text, sid=sid)
         # give Evon a chance to phrase the result naturally
         try:
             follow = await evon.chat([
@@ -269,13 +270,13 @@ async def evon_reply(text: str) -> dict | None:
         return None
 
 
-async def handle_utterance(text: str, lang: str = "hi-IN") -> dict:
+async def handle_utterance(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
     """Main entry: brain decides who answers."""
     if evon_settings_ready():
-        result = await evon_reply(text)
+        result = await evon_reply(text, sid)
         if result:
             return {**result, "brain": "evon"}
-    return {**rule_reply(text, lang), "brain": "rules"}
+    return {**rule_reply(text, lang, sid), "brain": "rules"}
 
 
 def evon_settings_ready() -> bool:

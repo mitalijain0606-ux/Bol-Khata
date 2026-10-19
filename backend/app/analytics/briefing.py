@@ -5,9 +5,9 @@ from app.agent import tools as T
 from app.analytics import trust_score
 
 
-def build_briefing(conn) -> dict:
-    tot = T.totals(conn)
-    dues = [c for c in T.customers_with_dues(conn) if c["balance"] > 0]
+def build_briefing(conn, sid: int = 1) -> dict:
+    tot = T.totals(conn, sid)
+    dues = [c for c in T.customers_with_dues(conn, sid) if c["balance"] > 0]
 
     # promises made recently
     from datetime import datetime, timedelta
@@ -36,7 +36,7 @@ def build_briefing(conn) -> dict:
         lines.append(f"Sabse bada baki {top['name']} ka hai — {T.fmt_money(top['balance'])}. "
                      f"Aaj {min(3, len(dues))} customers ko call karne hain.")
 
-    risky = [s for s in trust_score.all_scores(conn) if s["score"] < 40]
+    risky = [s for s in trust_score.all_scores(conn, sid) if s["score"] < 40]
     if risky:
         lines.append(f"Aur {risky[0]['customer']} ka score {risky[0]['score']} hai — udhaar sambhal ke.")
 

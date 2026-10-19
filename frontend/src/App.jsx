@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { api } from "./api.js";
+import { api, getToken, clearToken } from "./api.js";
 import { speechSupported } from "./voice.js";
+import Auth from "./pages/Auth.jsx";
 import Khata from "./pages/Khata.jsx";
 import CallScreen from "./pages/CallScreen.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
@@ -10,21 +11,38 @@ const TABS = [
   { key: "khata", ic: "🎤", label: "Khata" },
   { key: "call", ic: "📞", label: "Calls" },
   { key: "dash", ic: "📊", label: "Hisaab" },
-  { key: "set", ic: "⚙️", label: "Settings" },
+  { key: "set", ic: "⚙️", label: "Setting" },
 ];
 
 export default function App() {
+  const [authed, setAuthed] = useState(null); // null=checking, false=login, obj=shopkeeper
   const [tab, setTab] = useState("khata");
   const [health, setHealth] = useState(null);
-  const [shop, setShop] = useState(null);
 
-  const refresh = () => {
-    api.health().then(setHealth).catch(() => setHealth({ mode: "offline", providers: {} }));
-    api.shopkeeper().then(setShop).catch(() => {});
+  useEffect(() => {
+    api.health().then(setHealth).catch(() => setHealth({ providers: {} }));
+    if (getToken()) {
+      api.me().then(setAuthed).catch(() => setAuthed(false));
+    } else {
+      setAuthed(false);
+    }
+  }, []);
+
+  const refreshMe = () => api.me().then(setAuthed).catch(() => {});
+
+  const logout = () => {
+    clearToken();
+    window.location.reload();
   };
-  useEffect(refresh, []);
 
-  const gnani = health?.mode === "gnani";
+  if (authed === null) {
+    return <div className="auth-wrap"><div className="auth-hero"><div className="logo-big">ब</div><h1>Bol-Khata</h1></div></div>;
+  }
+  if (authed === false) {
+    return <Auth onLogin={refreshMe} />;
+  }
+
+  const live = health?.providers?.stt;
 
   return (
     <div className="app">
@@ -33,19 +51,19 @@ export default function App() {
           <div className="logo">ब</div>
           <div>
             <h1>Bol-Khata</h1>
-            <small>{shop ? `${shop.shop_name} · ${shop.name}` : "bolke khata, bolke vasooli"}</small>
+            <small>{authed.shop_name || authed.name}</small>
           </div>
         </div>
-        <div className={"mode-chip" + (gnani ? " gnani" : "")}>
-          {gnani ? <>Gnani <b>Prisma·Timbre·Evon</b></> : <>Mode: <b>Mock (free)</b></>}
+        <div className="live-chip">
+          <span className="dot" /> {live ? "AI Live" : "AI Ready"}
         </div>
       </header>
 
       <main className="page">
-        {tab === "khata" && <Khata gnani={gnani} onNav={setTab} />}
-        {tab === "call" && <CallScreen gnani={gnani} />}
+        {tab === "khata" && <Khata gnani={live} onNav={setTab} />}
+        {tab === "call" && <CallScreen />}
         {tab === "dash" && <Dashboard onNav={setTab} />}
-        {tab === "set" && <Settings health={health} shop={shop} onSaved={refresh} />}
+        {tab === "set" && <Settings me={authed} onSaved={refreshMe} onLogout={logout} />}
       </main>
 
       <nav className="navbar">

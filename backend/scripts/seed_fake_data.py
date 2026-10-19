@@ -31,7 +31,11 @@ def seed(reset: bool = True):
     today = date.today()
 
     with db() as conn:
-        conn.execute("INSERT INTO shopkeeper (id, name, shop_name, language_pref) VALUES (1, 'Ramesh Kumar', 'Sharma Kirana Store', 'hi-IN')")
+        from app.auth import hash_password
+        conn.execute(
+            "INSERT INTO shopkeeper (id, name, shop_name, phone, password_hash, language_pref) "
+            "VALUES (1, 'Ramesh Kumar', 'Sharma Kirana Store', '9876543210', ?, 'hi-IN')",
+            (hash_password("demo1234"),))
 
         customers = []
         for i in range(12):
@@ -106,6 +110,7 @@ def seed(reset: bool = True):
         )
 
     print("Seed done: 1 shopkeeper, 12 customers, entries, promises, 1 call.")
+    print("Demo login -> phone: 9876543210 | password: demo1234")
 
 
 if __name__ == "__main__":

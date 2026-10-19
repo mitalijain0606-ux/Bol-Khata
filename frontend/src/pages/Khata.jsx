@@ -53,7 +53,7 @@ export default function Khata({ gnani, onNav }) {
       const r = recRef.current;
       recRef.current = null;
       setListening(false);
-      setHeard("Prisma sun raha hai…");
+      setHeard("Sun raha hoon…");
       r.stop()
         .then((wav) => transcribeViaPrisma(wav, lang))
         .then((d) => {
@@ -98,7 +98,7 @@ export default function Khata({ gnani, onNav }) {
       <div className="card mic-card">
         <div className="row">
           <div className="stat">
-            <div className="num amber">{totals ? fmt(totals.udhaar_total) : "—"}</div>
+            <div className="num red">{totals ? fmt(totals.udhaar_total) : "—"}</div>
             <div className="lbl">Kul udhaar</div>
           </div>
           <div className="stat">
@@ -106,7 +106,7 @@ export default function Khata({ gnani, onNav }) {
             <div className="lbl">Aaj cash aaya</div>
           </div>
           <div className="stat">
-            <div className="num">{totals ? fmt(totals.udhaar_today) : "—"}</div>
+            <div className="num amber">{totals ? fmt(totals.udhaar_today) : "—"}</div>
             <div className="lbl">Aaj udhaar</div>
           </div>
         </div>
