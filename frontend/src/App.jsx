@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api, getToken, clearToken } from "./api.js";
 import { speechSupported } from "./voice.js";
+import Logo from "./Logo.jsx";
 import Auth from "./pages/Auth.jsx";
 import Khata from "./pages/Khata.jsx";
 import CallScreen from "./pages/CallScreen.jsx";
@@ -47,7 +48,14 @@ export default function App() {
   };
 
   if (authed === null) {
-    return <div className="auth-wrap"><div className="auth-hero"><div className="logo-big">ब</div><h1>Bol-Khata</h1></div></div>;
+    return (
+      <div className="auth-wrap">
+        <div className="auth-hero">
+          <Logo size={74} radius={24} />
+          <h1>Bol-Khata</h1>
+        </div>
+      </div>
+    );
   }
   if (authed === false) {
     return (
@@ -66,20 +74,15 @@ export default function App() {
     <div className="app">
       <header className="topbar">
         <div className="brand">
-          <div className="logo">ब</div>
+          <Logo size={42} />
           <div>
             <h1>Bol-Khata</h1>
             <small>{authed.shop_name || authed.name}</small>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div className="live-chip">
-            <span className="dot" /> {live ? "AI Live" : "AI Ready"}
-          </div>
-          <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
-            {theme === "dark" ? "☀️" : "🌙"}
-          </button>
-        </div>
+        <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
+          {theme === "dark" ? "☀️" : "🌙"}
+        </button>
       </header>
 
       <main className="page">

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { api, setToken } from "../api.js";
+import Logo from "../Logo.jsx";
 
 export default function Auth({ onLogin }) {
   const [mode, setMode] = useState("login"); // login | register
@@ -35,7 +36,7 @@ export default function Auth({ onLogin }) {
   return (
     <div className="auth-wrap">
       <div className="auth-hero">
-        <div className="logo-big">ब</div>
+        <Logo size={74} radius={24} />
         <h1>Bol-Khata</h1>
         <p>Aapki dukaan ka AI manager — bolke khata, bolke vasooli</p>
       </div>
