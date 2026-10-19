@@ -1,4 +1,4 @@
-"""Gnani Prisma v2.5 STT wrapper — exact API per docs.gnani.ai/api/STT.
+"""Cloud STT wrapper (REST + realtime WebSocket).
 
 REST : POST {base}/stt/v3          multipart(audio_file, language_code) -> {transcript}
 WS   : wss://{base}/stt/v3/stream  headers x-api-key-id + lang_code,
@@ -23,10 +23,10 @@ def _headers() -> dict:
 async def transcribe_clip(audio_bytes: bytes, lang: str = "") -> str:
     """One-shot STT for clips <= 60s. Returns transcript text."""
     if not settings.stt_configured:
-        raise ProviderNotConfigured("Gnani key missing — frontend uses browser STT in Mock Mode")
+        raise ProviderNotConfigured("Speech API key missing — frontend uses browser STT in Mock Mode")
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(
-            settings.gnani_base + settings.stt_rest_path,
+            settings.speech_base + settings.stt_rest_path,
             headers=_headers(),
             files={"audio_file": ("clip.wav", audio_bytes, "audio/wav")},
             data={"language_code": lang or settings.stt_lang},
@@ -39,8 +39,8 @@ async def transcribe_clip(audio_bytes: bytes, lang: str = "") -> str:
 
 
 async def open_stream(lang: str = ""):
-    """Open the realtime Prisma WebSocket (caller sends PCM frames)."""
-    url = settings.gnani_base.replace("https", "wss").replace("http", "ws") + settings.stt_ws_path
+    """Open the realtime STT WebSocket (caller sends PCM frames)."""
+    url = settings.speech_base.replace("https", "wss").replace("http", "ws") + settings.stt_ws_path
     return await websockets.connect(
         url,
         extra_headers={

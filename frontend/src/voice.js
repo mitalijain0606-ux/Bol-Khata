@@ -1,6 +1,6 @@
 // Voice engine — dual mode, automatic:
-//   Gnani Mode : mic audio -> backend /api/stt -> Gnani PRISMA transcript
-//                replies  -> backend /api/tts -> Gnani TIMBRE audio (Poorvi etc.)
+//   cloud mode : mic audio -> backend /api/stt -> cloud STT transcript
+//                replies  -> backend /api/tts -> cloud TTS audio
 //   Mock Mode  : browser SpeechRecognition + speechSynthesis (free fallback)
 // The app only calls startListening()/recordUtterance() and speak().
 
@@ -52,7 +52,7 @@ export function stopListening() {
 
 export const isListening = () => active;
 
-// ---------------- STT (Gnani Prisma path) ----------------
+// ---------------- STT (cloud STT path) ----------------
 
 // Tap-to-talk: startRecording() -> stopper.stop() -> 16 kHz mono WAV blob
 export async function startRecording(onLevel) {
@@ -123,7 +123,7 @@ async function blobToWav16k(blob) {
   return new Blob([header, pcm.buffer], { type: "audio/wav" });
 }
 
-export async function transcribeViaPrisma(wavBlob, lang = "hi-IN") {
+export async function transcribeViaCloud(wavBlob, lang = "hi-IN") {
   const fd = new FormData();
   fd.append("file", wavBlob, "utterance.wav");
   const r = await fetch(`/api/stt?lang=${lang}`, { method: "POST", body: fd });
@@ -132,7 +132,7 @@ export async function transcribeViaPrisma(wavBlob, lang = "hi-IN") {
   return d; // {transcript, provider}
 }
 
-// ---------------- TTS — Timbre first, browser fallback ----------------
+// ---------------- TTS — cloud first, browser fallback ----------------
 
 let currentAudio = null;
 
@@ -145,7 +145,7 @@ export function stopSpeaking() {
 }
 
 export function speak(text, { voice = "", lang = "hi-IN", pitch = 1, rate = 1, onEnd } = {}) {
-  // 1) Gnani Timbre (backend proxies; returns audio/wav in Gnani mode)
+  // 1) cloud TTS (backend proxies; returns audio/wav when configured)
   fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`)
     .then(async (r) => {
       if (r.status === 204 || !r.ok) throw new Error("no timbre");

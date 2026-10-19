@@ -112,7 +112,7 @@ def me(request: Request):
 def health():
     return {
         "ok": True,
-        "mode": settings.mode,
+        "mode": ("cloud" if settings.mode == "gnani" else "mock"),
         "providers": {
             "stt": settings.stt_configured,
             "tts": settings.tts_configured,
@@ -351,7 +351,7 @@ def call_end(call_id: int):
 @app.websocket("/ws/voice")
 async def ws_voice(ws: WebSocket):
     await ws.accept()
-    await ws.send_json({"type": "hello", "mode": settings.mode})
+    await ws.send_json({"type": "hello", "mode": ("cloud" if settings.mode == "gnani" else "mock")})
     prisma_ws = None
     try:
         while True:

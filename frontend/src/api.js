@@ -48,7 +48,7 @@ export const api = {
   trustScores: () => get("/api/trust-scores"),
   briefing: () => get("/api/briefing"),
 
-  // rule-engine brain (free) — Evon upgrades server-side
+  // rule-engine brain (free) — LLM upgrades server-side
   command: (text, lang = "hi-IN") => post("/api/voice/command", { text, lang }),
 
   tts: (text, voice = "", lang = "hi-IN") =>

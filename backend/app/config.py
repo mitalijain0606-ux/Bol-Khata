@@ -18,9 +18,9 @@ def _env(key: str, default: str = "") -> str:
 
 
 class Settings:
-    # --- Gnani platform (exact paths per docs.gnani.ai quick-start) ---
+    # --- speech provider (endpoints per the provider docs quick-start) ---
     gnani_api_key: str = _env("SPEECH_API_KEY")
-    gnani_base: str = _env("SPEECH_API_BASE", "https://api.vachana.ai") or "https://api.vachana.ai"
+    speech_base: str = _env("SPEECH_API_BASE", "https://api.vachana.ai") or "https://api.vachana.ai"
     stt_rest_path: str = _env("STT_REST_PATH", "/stt/v3")
     stt_ws_path: str = _env("STT_WS_PATH", "/stt/v3/stream")
     tts_rest_path: str = _env("TTS_REST_PATH", "/api/v1/tts/inference")
@@ -36,7 +36,7 @@ class Settings:
     ]
     stt_lang: str = _env("STT_LANG", "hi-IN")
 
-    # --- Evon ---
+    # --- Reasoning LLM ---
     evon_api_url: str = _env("EVON_API_URL")
     evon_api_key: str = _env("EVON_API_KEY")
     evon_model: str = _env("EVON_MODEL", "evon-v3.3")
@@ -60,7 +60,7 @@ class Settings:
 
     @property
     def mode(self) -> str:
-        """'gnani' = full Gnani stack, 'mock' = free browser-speech fallback."""
+        """'cloud' = provider APIs, 'mock' = free browser-speech fallback."""
         return "gnani" if self.gnani_api_key else "mock"
 
 

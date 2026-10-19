@@ -1,7 +1,7 @@
 """Collections call simulator — Bol-Khata's outbound agent vs synthetic debtors.
 
 Three fake-debtor personas (promiser / avoider / bargainer) driven by a state
-machine. In Gnani Mode the AGENT's lines can be upgraded to Evon, but the
+machine. In cloud mode the AGENT's lines can be upgraded to the LLM, but the
 template brain below already produces a fully working, free, repeatable demo —
 no real phone numbers, no real calls (DPDP-safe).
 

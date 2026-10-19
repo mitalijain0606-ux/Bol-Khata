@@ -12,8 +12,8 @@ import re
 
 from app.agent import tools as T
 
-# ---- Devanagari -> roman (for Prisma transcripts) ----
-# Prisma returns native-script text (ITN numerals included). The rule brain is
+# ---- Devanagari -> roman (for native-script transcripts) ----
+# The cloud STT returns native-script text (ITN numerals included). The rule brain is
 # roman-Hinglish, so we transliterate with a deliberate 'a'-friendly mapping:
 # ा→a (not aa) keeps 'sharma' as 'sharma', 'udhaar' as 'udhaar'.
 _DEV = {
@@ -156,7 +156,7 @@ LANG_NUM_WORDS = {
 def parse_amount(text: str, lang: str = "hi-IN") -> float | None:
     """'₹2,500' / '2500' / 'do hazaar paanch sau' / 'don hajar' / 'irandu aayiram'.
     Date-fragments ('19 October', '15 tareekh') are stripped first so a date
-    day-number is never read as an amount. Prisma's ITN usually returns digits,
+    day-number is never read as an amount. STT text normalization usually returns digits,
     which this takes directly."""
     t = text.lower().replace(",", "").replace("₹", "").replace("rupees", "").replace("rupaye", "")
     t = re.sub(
@@ -205,7 +205,7 @@ def parse_amount(text: str, lang: str = "hi-IN") -> float | None:
 def find_customer_name(text: str, known_names: list[str]) -> str:
     """Match a known customer name in the utterance — token-aware + vowel-fuzzy:
     'Sharma ji ko udhaar' matches 'Rajesh Sharma'; 'raajesh' matches 'Rajesh'
-    (Prisma transliterations double vowels)."""
+    (transliterations double vowels)."""
     t = re.sub(r"\b(ji|bhai|bhaiya|seth|sahab)\b", "", text.lower())
     t_fuzz = fuzz(t)
     best, best_len = "", 0

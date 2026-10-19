@@ -1,4 +1,4 @@
-"""The agent brain: Evon tool-calling when configured, Hinglish rule engine otherwise.
+"""The agent brain: LLM tool-calling when configured, Hinglish rule engine otherwise.
 
 Both paths produce the same shape:
   {"reply": str, "action": str, "data": {...}}  — frontend speaks `reply`.
@@ -116,9 +116,9 @@ def run_tool(name: str, args: dict, transcript: str = "", sid: int = 1) -> dict:
     return {"reply": "Samajh nahi aaya, dobara boliye.", "action": "UNKNOWN", "data": {}}
 
 
-# ---------------- rule-engine path (Mock/Gnani brain) ----------------
+# ---------------- rule-engine path (local brain) ----------------
 
-# Replies for Marathi / Tamil in native script (Timbre speaks them natively).
+# Replies for Marathi / Tamil in native script (the TTS speaks them natively).
 REPLIES = {
     "mr-IN": {
         "add": "{name} वर {amt} ची नोंद लावली. एकूण बाकी {bal}.",
@@ -236,7 +236,7 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
     }
 
 
-# ---------------- Evon path (Gnani Mode brain) ----------------
+# ---------------- LLM path (cloud mode brain) ----------------
 
 async def evon_reply(text: str, sid: int = 1) -> dict | None:
     try:
@@ -250,7 +250,7 @@ async def evon_reply(text: str, sid: int = 1) -> dict | None:
         fn = call["function"]["name"]
         args = json.loads(call["function"].get("arguments") or "{}")
         result = run_tool(fn, args, transcript=text, sid=sid)
-        # give Evon a chance to phrase the result naturally
+        # give the LLM a chance to phrase the result naturally
         try:
             follow = await evon.chat([
                 {"role": "user", "content": text},
@@ -266,7 +266,7 @@ async def evon_reply(text: str, sid: int = 1) -> dict | None:
     except ProviderNotConfigured:
         return None
     except Exception as e:  # never kill the voice loop on LLM hiccup
-        log.warning("Evon path failed (%s) — falling back to rules", e)
+        log.warning("LLM path failed (%s) — falling back to rules", e)
         return None
 
 

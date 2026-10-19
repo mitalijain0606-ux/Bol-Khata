@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
-import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaPrisma } from "../voice.js";
+import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
 
 const LANGS = [
   { code: "hi-IN", label: "Hinglish", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
@@ -37,7 +37,7 @@ export default function Khata({ gnani, onNav }) {
     setBusy(true);
     say(text, "you");
     try {
-      const res = await api.command(text, lang); // rule brain; Evon upgrades this server-side
+      const res = await api.command(text, lang); // rule brain; LLM upgrades this server-side
       say(res.reply, "agent");
       speak(res.reply, { lang, pitch: 1, rate: 1.02 });
       if (["ENTRY_ADDED", "SETTLED"].includes(res.action)) refreshFeed();
@@ -48,14 +48,14 @@ export default function Khata({ gnani, onNav }) {
   };
 
   const toggleMic = () => {
-    // stop-path: recording chal rahi hai -> roko aur Prisma ko bhejo
+    // stop-path: recording chal rahi hai -> roko aur cloud STT ko bhejo
     if (recRef.current) {
       const r = recRef.current;
       recRef.current = null;
       setListening(false);
       setHeard("Sun raha hoon…");
       r.stop()
-        .then((wav) => transcribeViaPrisma(wav, lang))
+        .then((wav) => transcribeViaCloud(wav, lang))
         .then((d) => {
           if (d.transcript) processUtterance(d.transcript);
           else { setHeard(""); say("Awaz clear nahi aayi — dobara boliye.", "agent"); }
@@ -66,7 +66,7 @@ export default function Khata({ gnani, onNav }) {
 
     stopSpeaking();
     if (gnani && navigator.mediaDevices?.getUserMedia) {
-      // Gnani Mode: mic -> Prisma
+      // cloud mode: mic -> cloud STT
       setListening(true);
       setHeard("sun raha hoon… (bol ke dobara dabaao)");
       startRecording()

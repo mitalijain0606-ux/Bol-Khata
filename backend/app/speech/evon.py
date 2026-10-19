@@ -1,4 +1,4 @@
-"""Gnani Evon v3.3 reasoning-model wrapper (30B, 128K ctx, 11 Indic languages).
+"""Reasoning-LLM wrapper (OpenAI-compatible chat + tools).
 
 Access options (free, Apache 2.0):
   A) EVON_API_URL  -> OpenAI-compatible /chat/completions endpoint (platform or
@@ -29,7 +29,7 @@ async def chat(messages: list[dict], tools: list[dict] | None = None) -> dict:
         return await _chat_openai_compatible(messages, tools)
     if settings.evon_hf_model:
         return await _chat_hf(messages)
-    raise ProviderNotConfigured("Evon not configured — rule engine active")
+    raise ProviderNotConfigured("LLM not configured — rule engine active")
 
 
 async def _chat_openai_compatible(messages: list[dict], tools: list[dict] | None) -> dict:

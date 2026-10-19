@@ -37,7 +37,7 @@ export default function CallScreen({ gnani }) {
   const speakSeq = (who, text) =>
     new Promise((res) => {
       setSpeaking(who);
-      // Gnani Timbre voices: agent = Poorvi (server default), customer = rotation
+      // cloud TTS voices: agent = Poorvi (server default), customer = rotation
       // (pitch/rate only affect the browser-TTS fallback in mock mode)
       const gnaniVoice = who === "agent" ? "" : custVoiceRef.current;
       speak(text, {

@@ -1,10 +1,10 @@
 """Noise-Canceller test harness (free, offline).
 
-Timbre TTS se synthetic test sentences banao -> market/traffic noise mix karo ->
-Gnani Prisma aur ek baseline (browser/whisper) pe WER compare karo.
+cloud TTS se synthetic test sentences banao -> market/traffic noise mix karo ->
+cloud STT aur ek baseline (browser/whisper) pe WER compare karo.
 Output: demo/noise_report.json + console table.
 
-Prisma-less machines pe ye sirf test-set generate karta hai; WER step needs keys.
+Key-less machines pe ye sirf test-set generate karta hai; WER step needs keys.
 """
 import asyncio
 import json
@@ -30,7 +30,7 @@ SAMPLE_RATE = 16000
 
 
 def synth_tone_speech_placeholder(text: str, seconds: float = 2.0) -> bytes:
-    """Offline placeholder 'speech' (tonal hum) — replaced by Timbre TTS when
+    """Offline placeholder 'speech' (tonal hum) — replaced by cloud TTS when
     keys are configured. Keeps the harness runnable at zero cost."""
     import math
     frames = bytearray()
@@ -76,7 +76,7 @@ async def main():
     snrs = [0, 5, 10]
     report = {"generated": [], "wer": {}}
 
-    # 1) generate test set (Timbre when configured, placeholder otherwise)
+    # 1) generate test set (cloud TTS when configured, placeholder otherwise)
     for s_i, sent in enumerate(SENTENCES):
         if settings.tts_configured:
             from app.speech.tts import synthesize
@@ -91,7 +91,7 @@ async def main():
             write_wav(OUT / f"utt_{s_i}_{snr}db.wav", mix(speech, noise, snr))
         report["generated"].append(sent)
 
-    # 2) WER eval (needs Gnani key; skip otherwise)
+    # 2) WER eval (needs STT key; skip otherwise)
     if settings.stt_configured:
         from app.speech.stt import transcribe_clip
         def wer(ref: str, hyp: str):

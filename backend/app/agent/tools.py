@@ -1,6 +1,6 @@
 """Ledger operations — every agent action on the khata goes through these.
 
-Kept as plain functions on sqlite so both the Evon tool-calling path and the
+Kept as plain functions on sqlite so both the LLM tool-calling path and the
 rule-engine path share exactly the same effects.
 """
 import re
@@ -21,7 +21,7 @@ def find_customer(conn, name: str, shopkeeper_id: int = 1):
     """'Sharma ji' spoken -> matches 'Rajesh Sharma' in the ledger.
 
     People say surnames + honorifics, the khata stores full names — so match on
-    any significant token, with doubled vowels collapsed (Prisma transcripts
+    any significant token, with doubled vowels collapsed (native-script transcripts
     transliterate to 'raajesh'/'sharmaa'-style spellings)."""
     from app.agent.nlu import fuzz
 

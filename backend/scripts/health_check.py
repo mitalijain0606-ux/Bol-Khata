@@ -1,4 +1,4 @@
-"""Run once after cloning: teeno Gnani APIs pe 1-1 test call -> 'all green'.
+"""Run once after cloning: teeno speech APIs pe 1-1 test call -> 'all green'.
 
   python -m scripts.health_check
 """
@@ -26,7 +26,7 @@ async def main():
     print(f"Mode: {settings.mode.upper()}")
     print(f"STT configured : {settings.stt_configured}")
     print(f"TTS configured : {settings.tts_configured}")
-    print(f"Evon configured: {settings.evon_configured}")
+    print(f"LLM configured: {settings.evon_configured}")
 
     if settings.stt_configured:
         try:
@@ -43,13 +43,13 @@ async def main():
     if settings.evon_configured:
         try:
             r = await evon_chat([{"role": "user", "content": "Ek line me apna naam batao."}])
-            print(f"Evon ping OK -> {r['choices'][0]['message'].get('content', '')[:80]}")
+            print(f"LLM ping OK -> {r['choices'][0]['message'].get('content', '')[:80]}")
         except Exception as e:
-            print(f"Evon ping FAILED -> {e}")
+            print(f"LLM ping FAILED -> {e}")
 
     if settings.mode == "mock":
         print("\nMock Mode active — app poora chalega (browser speech + rule brain).")
-        print("Gnani pe shift hone ke liye: .env me keys bharo (see .env.example).")
+        print("Cloud pe shift hone ke liye: .env me keys bharo (see .env.example).")
 
 
 if __name__ == "__main__":
