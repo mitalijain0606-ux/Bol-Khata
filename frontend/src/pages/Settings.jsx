@@ -54,20 +54,10 @@ export default function Settings({ me, onSaved, onLogout }) {
         {enrollState && <div style={{ marginTop: 10, fontSize: 13 }}>{enrollState}</div>}
       </div>
 
-      <div className="card">
-        <h3>AI engines</h3>
-        <div className="prov"><span>Sunne wala (speech-to-text)</span><span className="on">Cloud · Active</span></div>
-        <div className="prov"><span>Bolne wala (text-to-speech)</span><span className="on">Cloud · Active</span></div>
-        <div className="prov"><span>Samajhne wala (brain)</span><span className="on">Active</span></div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
-          Speech, voice aur reasoning engines cloud pe chal rahe hain — bina screen
-          chhue, sirf bolke poora khata.
-        </div>
-      </div>
-
       <div className="card" style={{ fontSize: 12.5, color: "var(--muted)" }}>
         🔒 Privacy: is app ka saara data demo ke liye banaya gaya hai — fake naam,
         fake numbers, banavati awaazein. Koi real personal data use nahi hota.
+        Aapka account aapke number + password se surakshit hai — sirf aap khul sakte hain.
       </div>
 
       <button className="btn ghost" style={{ width: "100%", color: "var(--red)" }} onClick={onLogout}>
