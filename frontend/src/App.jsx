@@ -8,7 +8,7 @@ import CallScreen from "./pages/CallScreen.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import Settings from "./pages/Settings.jsx";
 
-const THEME_KEY = "bolkhata_theme";
+const THEME_KEY = "bolkhata_theme_v2";
 const applyTheme = (t) => document.body.classList.toggle("light", t === "light");
 
 const TABS = [
@@ -22,7 +22,7 @@ export default function App() {
   const [authed, setAuthed] = useState(null); // null=checking, false=login, obj=shopkeeper
   const [tab, setTab] = useState("khata");
   const [health, setHealth] = useState(null);
-  const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "dark");
+  const [theme, setTheme] = useState(localStorage.getItem(THEME_KEY) || "light");
 
   useEffect(() => {
     applyTheme(theme);
