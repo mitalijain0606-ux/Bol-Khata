@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
-import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
+import CustomerDetail from "./CustomerDetail.jsx";
+import { fmt } from "../util.js";
+import { speak, startListening, stopListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
 
 const LANGS = [
   { code: "hi-IN", label: "Hinglish", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
@@ -8,7 +10,11 @@ const LANGS = [
   { code: "ta-IN", label: "தமிழ்", ex: "ராஜேஷ் 2,000 கடன் பதிவு செய்" },
 ];
 
-export default function Khata({ gnani, onNav }) {
+const ADVICE = { yes: "✅ De sakte hain", careful: "⚠️ Sambhal ke", no: "⛔ Mat dijiye" };
+
+export default function Khata({ gnani, onNav, me }) {
+  const [typed, setTyped] = useState("");
+  const [openCid, setOpenCid] = useState(null);
   const [listening, setListening] = useState(false);
   const [heard, setHeard] = useState("");
   const [log, setLog] = useState([]);
@@ -23,13 +29,16 @@ export default function Khata({ gnani, onNav }) {
     api.entries(12).then(setEntries).catch(() => {});
     api.totals().then(setTotals).catch(() => {});
   };
-  useEffect(refreshFeed, []);
+  useEffect(() => {
+    refreshFeed();
+    return () => { stopListening(); stopSpeaking(); };   // leaving the tab: release the mic
+  }, []);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: 1e6, behavior: "smooth" });
   }, [log]);
 
-  const say = (text, who = "agent") => setLog((l) => [...l, { who, text }]);
+  const say = (text, who = "agent", extra = {}) => setLog((l) => [...l, { who, text, ...extra }]);
 
   const processUtterance = async (text) => {
     if (!text) return;
@@ -38,11 +47,14 @@ export default function Khata({ gnani, onNav }) {
     say(text, "you");
     try {
       const res = await api.command(text, lang); // rule brain; LLM upgrades this server-side
-      say(res.reply, "agent");
+      say(res.reply, "agent", {
+        confirm: res.action === "CONFIRM_SETTLE",
+        advice: res.action === "LEND_ADVICE" ? res.data.decision : null,
+      });
       speak(res.reply, { lang, pitch: 1, rate: 1.02 });
-      if (["ENTRY_ADDED", "SETTLED"].includes(res.action)) refreshFeed();
+      if (["ENTRY_ADDED", "SETTLED", "ENTRY_DELETED"].includes(res.action)) refreshFeed();
     } catch (e) {
-      say("Server se baat nahi ho payi — backend chal raha hai?", "agent");
+      if (e.message !== "logged out") say("Server se baat nahi ho payi — backend chal raha hai?", "agent");
     }
     setBusy(false);
   };
@@ -61,6 +73,12 @@ export default function Khata({ gnani, onNav }) {
           else { setHeard(""); say("Awaz clear nahi aayi — dobara boliye.", "agent"); }
         })
         .catch((e) => { setHeard(""); say("STT fail: " + e.message, "agent"); });
+      return;
+    }
+
+    // Mock Mode stop-path: second tap ends listening (whatever was heard is used)
+    if (listening) {
+      stopListening();
       return;
     }
 
@@ -84,10 +102,13 @@ export default function Khata({ gnani, onNav }) {
     setHeard("sun raha hoon...");
     startListening(
       (partial) => setHeard(partial),
-      (final) => {
+      (final, err) => {
         setListening(false);
         if (final) processUtterance(final);
-        else setHeard("");
+        else {
+          setHeard("");
+          say(err ? err.message : "Kuch sunai nahi diya — mic dabake dobara boliye.", "agent");
+        }
       },
       lang
     );
@@ -98,8 +119,8 @@ export default function Khata({ gnani, onNav }) {
       <div className="card mic-card">
         <div className="row">
           <div className="stat">
-            <div className="num red">{totals ? fmt(totals.udhaar_total) : "—"}</div>
-            <div className="lbl">Kul udhaar</div>
+            <div className="num red">{totals ? fmt(totals.outstanding ?? totals.udhaar_total) : "—"}</div>
+            <div className="lbl">Kul baki udhaar</div>
           </div>
           <div className="stat">
             <div className="num green">{totals ? fmt(totals.cash_in_today) : "—"}</div>
@@ -131,6 +152,20 @@ export default function Khata({ gnani, onNav }) {
           </div>
           <div className="heard">{heard}</div>
         </div>
+
+        {/* typed fallback: same brain, no mic needed (noisy room, no permission, Firefox) */}
+        <form className="say-row" onSubmit={(e) => {
+          e.preventDefault();
+          const t = typed.trim();
+          if (!t || busy) return;
+          setTyped("");
+          stopSpeaking();
+          processUtterance(t);
+        }}>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)}
+                 placeholder="…ya yahan likh kar bhejiye" aria-label="Likh kar boliye" />
+          <button className="btn" disabled={busy || !typed.trim()}>Bhejo</button>
+        </form>
       </div>
 
       <div className="card">
@@ -157,6 +192,10 @@ export default function Khata({ gnani, onNav }) {
                           onClick={() => processUtterance("Aaj ka hisaab")}>
                     “Aaj ka hisaab”
                   </button>
+                  <button className="btn ghost" style={{ margin: 5, padding: "8px 12px", fontSize: 12.5 }}
+                          onClick={() => processUtterance("Chauhan ji ko 2000 udhaar du kya")}>
+                    “Chauhan ji ko 2000 udhaar du kya?”
+                  </button>
                 </>
               )}
             </div>
@@ -164,7 +203,16 @@ export default function Khata({ gnani, onNav }) {
           {log.map((m, i) => (
             <div key={i} className={`bubble ${m.who === "you" ? "you" : "agent"}`}>
               <span className="who">{m.who === "you" ? "Aap" : "Bol-Khata"}</span>
+              {m.advice && <><span className={"advice " + m.advice}>{ADVICE[m.advice]}</span><br /></>}
               {m.text}
+              {m.confirm && i === log.length - 1 && (
+                <div className="chip-row">
+                  <button className="btn" style={{ padding: "8px 16px" }} disabled={busy}
+                          onClick={() => processUtterance("haan")}>Haan, clear karo</button>
+                  <button className="btn ghost" style={{ padding: "8px 16px" }} disabled={busy}
+                          onClick={() => processUtterance("nahi")}>Nahi</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -172,9 +220,15 @@ export default function Khata({ gnani, onNav }) {
 
       <div className="card">
         <h3>Aakhri entries</h3>
+        {entries.length > 0 && (
+          <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 4 }}>
+            Entry pe tap karo — poora khata, galat entry hatana, WhatsApp reminder.
+          </div>
+        )}
         {entries.length === 0 && <div className="empty">Abhi koi entry nahi.</div>}
         {entries.map((e) => (
-          <div key={e.id} className={"entry " + (e.type === "UDHAAR" ? "udhaar" : "payment")}>
+          <div key={e.id} className={"entry tap " + (e.type === "UDHAAR" ? "udhaar" : "payment")}
+               onClick={() => setOpenCid(e.customer_id)}>
             <div className="tag">{e.type === "UDHAAR" ? "📕" : "💰"}</div>
             <div className="meta">
               <b>{e.customer_name}</b>
@@ -186,9 +240,12 @@ export default function Khata({ gnani, onNav }) {
       </div>
 
       <button className="btn" onClick={() => onNav("call")}>📞 Vasooli call shuru karo</button>
+
+      {openCid && (
+        <CustomerDetail cid={openCid} me={me} onClose={() => setOpenCid(null)} onChanged={refreshFeed} />
+      )}
     </>
   );
 }
 
-export const fmt = (n) =>
-  "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+export { fmt };

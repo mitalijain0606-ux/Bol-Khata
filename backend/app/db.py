@@ -103,7 +103,7 @@ def db():
 
 
 def init_schema():
-    with get_conn() as conn:
+    with db() as conn:
         conn.executescript(SCHEMA)
         # migrate existing DBs: add auth columns if missing
         cols = {r["name"] for r in conn.execute("PRAGMA table_info(shopkeeper)").fetchall()}

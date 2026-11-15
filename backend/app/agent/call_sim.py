@@ -39,13 +39,6 @@ PERSONAS = {
     },
 }
 
-DATE_WORDS = {
-    (date.today() + timedelta(days=1)).isoformat(): "kal",
-    (date.today() + timedelta(days=2)).isoformat(): "parso",
-    date.today().isoformat(): "aaj",
-}
-
-
 def _date_word(iso: str) -> str:
     try:
         d = datetime.fromisoformat(iso).date()
@@ -64,8 +57,14 @@ class CallSim:
     """In-memory conversation state; persisted to call_record on end()."""
 
     def __init__(self, call_id: int, customer: dict, balance: float,
-                  broken_count: int, persona_key: str, shop_name: str):
+                  broken_count: int, persona_key: str, shop_name: str, shopkeeper_id: int = 1):
         self.call_id = call_id
+        self.shopkeeper_id = shopkeeper_id
+        self.ended = False
+        # what a bargainer offers today — one figure for the whole call
+        self.offer = max(10.0, round(balance * random.uniform(0.25, 0.45), -1))
+        if self.offer >= balance:
+            self.offer = round(balance / 2, 0) or balance
         self.customer = customer
         self.balance = balance
         self.broken_count = broken_count
@@ -79,10 +78,11 @@ class CallSim:
         self.promise: dict | None = None
         self.partial_today: float | None = None
         self.agent_opening = self._agent_opening()
-        debtor_first = (
-            f"Haan bhaiya, boliye." if persona_key == "promiser"
-            else "Haan haan, bol raha hoon bhaiya..."
-        )
+        # the customer's first reaction answers the agent's question ("kab tak?")
+        debtor_first = self.persona["excuse"].format(partial=T.fmt_money(self.offer))
+        if self.persona["agree_fast"]:
+            debtor_first += " " + self.persona["promise_line"].format(
+                date_word="kal", amount=T.fmt_money(balance))
         self.transcript.append({"who": "agent", "text": self.agent_opening})
         self.transcript.append({"who": "customer", "text": debtor_first})
         self.last_debtor = debtor_first
@@ -115,7 +115,7 @@ class CallSim:
         if self.state == "EXCUSED":
             self.state = "NEGOTIATE"
             if self.broken_count:
-                return (f"Dekhiye, pichhle wada bhi adhoora raha. Naya wada todiye — "
+                return (f"Dekhiye, pichhla wada bhi adhoora raha. Is baar wada mat todiye — "
                         f"aaj se ek hafte ke andar {amt} ho jayega?")
             return (f"Thik hai ji, mushkil waqt hai. To kya {amt} agle hafte ke andar "
                     f"ho jayega? Date pakki kar lete hain.")
@@ -149,7 +149,7 @@ class CallSim:
     def _debtor_reply(self, agent_text: str) -> str:
         amt = T.fmt_money(self.balance)
         if self.state == "OPEN":
-            return self.persona["excuse"].format(partial=T.fmt_money(self.balance * 0.4))
+            return self.persona["excuse"].format(partial=T.fmt_money(self.offer))
         if self.state == "EXCUSED":
             if self.persona_key == "avoider":
                 return random.choice([
@@ -162,7 +162,7 @@ class CallSim:
             ])
         if self.state == "NEGOTIATE":
             if self.persona_key == "bargainer":
-                partial = round(self.balance * random.uniform(0.25, 0.45), -1)
+                partial = self.offer
                 return self.persona["promise_line"].format(
                     partial=T.fmt_money(partial), rest=T.fmt_money(self.balance - partial),
                     date_word="kal")
@@ -220,23 +220,27 @@ class CallSim:
         return {"done": False, "customer": reply, "state": self.state}
 
     def end(self) -> dict:
+        self.ended = True
+        promise_id = None
         if self.promise:
             with db() as conn:
-                T.log_promise(conn, self.customer["id"], self.promise["amount"],
-                              self.promise["due_date"], call_id=self.call_id)
-            if self.partial_today:
-                with db() as conn:
+                # the part paid on the call is booked first, so it is never
+                # counted towards the promise for the remaining amount
+                if self.partial_today:
                     T.add_entry(conn, self.customer["id"], "PAYMENT", self.partial_today,
                                 "Call pe partial payment", "",
                                 shopkeeper_id=self.customer["shopkeeper_id"])
+                promise_id = T.log_promise(conn, self.customer["id"], self.promise["amount"],
+                                           self.promise["due_date"], call_id=self.call_id)
         transcript_json = json.dumps(self.transcript, ensure_ascii=False)
         summary, sentiment, excuse = self._summarize()
-        outcome = "PROMISE" if self.promise else ("PARTIAL" if self.partial_today else "REFUSED")
+        outcome = ("PARTIAL" if self.partial_today else "PROMISE") if self.promise else "REFUSED"
         with db() as conn:
             conn.execute(
                 """UPDATE call_record SET transcript=?, summary=?, sentiment=?, excuse_type=?,
-                       outcome=?, duration_sec=? WHERE id=?""",
-                (transcript_json, summary, sentiment, excuse, outcome, self.turn * 25, self.call_id),
+                       outcome=?, duration_sec=?, promise_id=? WHERE id=?""",
+                (transcript_json, summary, sentiment, excuse, outcome,
+                 max(1, len(self.transcript)) * 12, promise_id, self.call_id),
             )
         return {"summary": summary, "outcome": outcome, "sentiment": sentiment,
                 "promise": self.promise, "partial_today": self.partial_today}
@@ -261,10 +265,14 @@ class CallSim:
 
 def start_call(customer_id: int, shopkeeper_id: int = 1) -> dict:
     with db() as conn:
-        cust = conn.execute("SELECT * FROM customer WHERE id = ?", (customer_id,)).fetchone()
+        cust = conn.execute("SELECT * FROM customer WHERE id = ? AND shopkeeper_id = ?",
+                            (customer_id, shopkeeper_id)).fetchone()
         if not cust:
             return {"error": "customer not found"}
         balance = T.customer_balance(conn, customer_id)
+        if balance <= 0:
+            return {"error": f"{cust['name']} ka koi udhaar baki nahi — call ki zaroorat nahi"}
+        T.expire_promises(conn, shopkeeper_id)
         broken = conn.execute(
             "SELECT COUNT(*) AS c FROM promise WHERE customer_id=? AND status='BROKEN'",
             (customer_id,),
@@ -276,7 +284,7 @@ def start_call(customer_id: int, shopkeeper_id: int = 1) -> dict:
         call_id = cur.lastrowid
 
     sim = CallSim(call_id, dict(cust), balance, broken, persona_key,
-                  shop["shop_name"] if shop else "dukaan")
+                  (shop["shop_name"] if shop and shop["shop_name"] else "dukaan"), shopkeeper_id)
     _CALLS[call_id] = sim
     return {
         "call_id": call_id,
@@ -289,24 +297,33 @@ def start_call(customer_id: int, shopkeeper_id: int = 1) -> dict:
     }
 
 
-def step_call(call_id: int) -> dict:
+def _get(call_id: int, shopkeeper_id: int | None):
+    """A call is only visible to the account that started it."""
     sim = _CALLS.get(call_id)
+    if not sim or (shopkeeper_id is not None and sim.shopkeeper_id != shopkeeper_id):
+        return None
+    return sim
+
+
+def step_call(call_id: int, shopkeeper_id: int | None = None) -> dict:
+    sim = _get(call_id, shopkeeper_id)
     if not sim:
         return {"error": "call not found (server restart?)"}
     return sim.step()
 
 
-def say_to_call(call_id: int, text: str) -> dict:
-    sim = _CALLS.get(call_id)
+def say_to_call(call_id: int, text: str, shopkeeper_id: int | None = None) -> dict:
+    sim = _get(call_id, shopkeeper_id)
     if not sim:
         return {"error": "call not found (server restart?)"}
     return sim.say(text)
 
 
-def end_call(call_id: int) -> dict:
-    sim = _CALLS.pop(call_id, None)
+def end_call(call_id: int, shopkeeper_id: int | None = None) -> dict:
+    sim = _get(call_id, shopkeeper_id)
     if not sim:
         return {"error": "call not found"}
+    _CALLS.pop(call_id, None)
     return sim.end()
 
 

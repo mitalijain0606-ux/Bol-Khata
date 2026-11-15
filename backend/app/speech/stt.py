@@ -40,11 +40,13 @@ async def transcribe_clip(audio_bytes: bytes, lang: str = "") -> str:
 
 async def open_stream(lang: str = ""):
     """Open the realtime STT WebSocket (caller sends PCM frames)."""
-    url = settings.speech_base.replace("https", "wss").replace("http", "ws") + settings.stt_ws_path
-    return await websockets.connect(
-        url,
-        extra_headers={
-            "x-api-key-id": settings.gnani_api_key,
-            "lang_code": lang or settings.stt_lang,
-        },
-    )
+    base = settings.speech_base
+    base = "wss" + base[5:] if base.startswith("https") else "ws" + base[4:] if base.startswith("http") else base
+    url = base + settings.stt_ws_path
+    if not settings.stt_configured:
+        raise ProviderNotConfigured("Speech API key missing")
+    headers = {"x-api-key-id": settings.gnani_api_key, "lang_code": lang or settings.stt_lang}
+    try:                       # websockets >= 14
+        return await websockets.connect(url, additional_headers=headers)
+    except TypeError:          # websockets 12 / 13
+        return await websockets.connect(url, extra_headers=headers)

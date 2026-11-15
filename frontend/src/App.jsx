@@ -86,9 +86,9 @@ export default function App() {
       </header>
 
       <main className="page">
-        {tab === "khata" && <Khata gnani={live} onNav={setTab} />}
-        {tab === "call" && <CallScreen />}
-        {tab === "dash" && <Dashboard onNav={setTab} />}
+        {tab === "khata" && <Khata gnani={live} onNav={setTab} me={authed} />}
+        {tab === "call" && <CallScreen me={authed} onNav={setTab} />}
+        {tab === "dash" && <Dashboard onNav={setTab} me={authed} />}
         {tab === "set" && <Settings me={authed} onSaved={refreshMe} onLogout={logout} />}
       </main>
 

@@ -35,7 +35,12 @@ three, by voice.
 | 📞 | **Collections agent** | Proactively calls customers with overdue balances, listens to excuses, pushes back (harder if they broke a previous promise), and extracts a **promise-to-pay date** — tracked against actual payments. |
 | 📊 | **Bharaut-Score** | Explainable per-customer trust score: broken promise −25 · late payment −10 · stale balance −5 · kept promise +5. Full breakdown in the UI. |
 | 🌅 | **Morning briefing** | A spoken daily report: totals, nearest promise due, who broke a promise, how many calls to make today. |
-| 🔒 | **Voice lock** | Owner enrolls ~5s of speech (ECAPA-TDNN embeddings, CPU-friendly). Destructive ledger actions need the owner's verified voice. |
+| 🤔 | **"Udhaar du?"** | *"Chauhan ji ko 2000 udhaar du kya?"* → a yes / careful / no answer backed by the customer's score, balance and promise history. |
+| 💬 | **WhatsApp reminder** | After a call (or from any customer's khata) one tap opens WhatsApp with the reminder pre-written — balance, promised amount and date. |
+| 🧾 | **Customer khata** | Tap any entry or score to see that customer's entries, promises and call history; delete a wrong entry there. |
+| ↩️ | **Undo & confirm** | *"Galat entry hatao"* removes the last entry. Clearing a whole balance always asks *"haan / nahi"* first. |
+| ⌨️ | **Type instead** | A text box under the mic sends the same commands — for noisy rooms or browsers without speech recognition. |
+| 🔒 | **Voice lock (beta)** | Owner enrolls ~5s of speech (ECAPA-TDNN embeddings, optional install) and a verification endpoint scores a clip against it. Not yet enforced on commands — see limitations. |
 | 🌍 | **Trilingual** | Hinglish, Marathi, Tamil — speech in, native-script replies out. |
 | 📱 | **Phone-first PWA** | Installs like an app, dark/light themes, phone-number + password login with per-account data isolation. |
 | 🧪 | **Noise harness** | Generates noisy test audio (0/5/10 dB SNR) and measures ASR word-error-rate. |
@@ -98,6 +103,31 @@ npm install && npm run build                   # backend serves the built PWA
 # Open http://localhost:8000 → login (9876543210 / demo1234)
 ```
 
+On **Windows** the virtualenv scripts live in `.venv\Scripts\` instead of `.venv/bin/`:
+
+```bat
+cd backend
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m scripts.seed_fake_data
+.venv\Scripts\uvicorn app.main:app --port 8000
+```
+
+Use **Chrome or Edge** — in the free browser-speech mode the mic relies on the
+browser's speech recognition, which Firefox does not ship. Build the frontend
+before starting the backend (or restart the backend after building).
+
+### Tests
+
+```bash
+cd backend
+.venv/bin/python -m unittest tests.test_smoke -v
+```
+
+The smoke tests run against a throw-away database (they never touch
+`backend/data/`) and cover the NLU in all three languages, account isolation,
+the promise lifecycle, the collections call and the trust score.
+
 ### Configuration
 
 Copy `backend/.env.example` → `backend/.env` and add API keys for cloud speech
@@ -137,6 +167,10 @@ frontend/src/pages/  Auth · Khata · CallScreen · Dashboard · Settings
   the simulated calls run inside the app, no real telephony.
 - Single-owner per deployment today; multi-tenant is straightforward schema work.
 - Sentiment analysis is keyword-based; the voice lock's anti-spoofing is basic.
+- Voice lock enrols and verifies a voice but does not yet gate commands; destructive
+  actions are protected by a spoken/tapped confirmation instead.
+- WhatsApp reminders open the contact picker (no number is pre-filled), so demo
+  data can never message a real person by accident.
 
 ---
 

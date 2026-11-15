@@ -4,6 +4,12 @@
 //   Mock Mode  : browser SpeechRecognition + speechSynthesis (free fallback)
 // The app only calls startListening()/recordUtterance() and speak().
 
+import { authHeaders } from "./api.js";
+
+export const micSupported = () =>
+  typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia &&
+  typeof MediaRecorder !== "undefined";
+
 export const speechSupported = () =>
   typeof window !== "undefined" &&
   ("webkitSpeechRecognition" in window || "SpeechRecognition" in window);
@@ -19,30 +25,47 @@ export function startListening(onPartial, onFinal, lang = "hi-IN") {
     return () => {};
   }
   const SR = window.webkitSpeechRecognition || window.SpeechRecognition;
-  rec = new SR();
-  rec.lang = lang;
-  rec.continuous = false;
-  rec.interimResults = true;
+  try { rec && rec.abort(); } catch {}
+  const r = new SR();
+  rec = r;
+  r.lang = lang;
+  r.continuous = false;
+  r.interimResults = true;
   active = true;
 
-  rec.onresult = (e) => {
-    let interim = "", final = "";
+  // onFinal fires exactly once per listen — with the text, or "" when the
+  // recogniser stops on silence / an error (the mic button used to stay stuck
+  // on "listening" forever in that case).
+  let finalText = "", lastInterim = "", delivered = false;
+  const deliver = (text, err) => {
+    if (delivered) return;
+    delivered = true;
+    active = false;
+    onFinal && onFinal(text, err);
+  };
+
+  r.onresult = (e) => {
+    let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) final += t;
+      if (e.results[i].isFinal) finalText += t;
       else interim += t;
     }
-    if (interim && onPartial) onPartial(interim);
-    if (final && onFinal) onFinal(final.trim());
+    if (interim) { lastInterim = interim; onPartial && onPartial(interim); }
   };
-  rec.onerror = (e) => {
-    active = false;
-    onFinal && onFinal("", new Error(e.error === "not-allowed" ? "Mic permission chahiye" : e.error));
+  r.onerror = (e) => {
+    if (e.error === "no-speech" || e.error === "aborted") return; // onend follows
+    const msg = e.error === "not-allowed" || e.error === "service-not-allowed"
+      ? "Mic ki permission chahiye — browser me mic allow kijiye"
+      : e.error === "network" ? "Speech service tak nahi pahunch paye — internet check kijiye"
+      : e.error === "audio-capture" ? "Mic nahi mila — mic jod kar dobara koshish kijiye"
+      : "Mic error: " + e.error;
+    deliver("", new Error(msg));
   };
-  rec.onend = () => { active = false; };
-  try { rec.start(); } catch { /* already started */ }
+  r.onend = () => deliver((finalText || lastInterim).trim());
+  try { r.start(); } catch (e) { deliver("", e); }
 
-  return () => { try { rec && rec.stop(); } catch {} };
+  return () => { try { r.stop(); } catch {} };
 }
 
 export function stopListening() {
@@ -89,7 +112,6 @@ export async function startRecording(onLevel) {
     stop: async () => {
       if (mr.state !== "inactive") mr.stop();
       await stopped;
-      clearTimeout(null);
       stream.getTracks().forEach((t) => t.stop());
       if (raf) cancelAnimationFrame(raf);
       if (ctx) ctx.close().catch(() => {});
@@ -126,7 +148,7 @@ async function blobToWav16k(blob) {
 export async function transcribeViaCloud(wavBlob, lang = "hi-IN") {
   const fd = new FormData();
   fd.append("file", wavBlob, "utterance.wav");
-  const r = await fetch(`/api/stt?lang=${lang}`, { method: "POST", body: fd });
+  const r = await fetch(`/api/stt?lang=${lang}`, { method: "POST", body: fd, headers: authHeaders() });
   if (!r.ok) throw new Error("STT fail: " + r.status);
   const d = await r.json();
   return d; // {transcript, provider}
@@ -137,6 +159,7 @@ export async function transcribeViaCloud(wavBlob, lang = "hi-IN") {
 let currentAudio = null;
 
 export function stopSpeaking() {
+  speakSeq++;
   try { window.speechSynthesis.cancel(); } catch {}
   if (currentAudio) {
     try { currentAudio.pause(); } catch {}
@@ -144,11 +167,40 @@ export function stopSpeaking() {
   }
 }
 
+let cloudTts = null; // null = not checked yet, false = server has no TTS key (mock mode)
+let speakSeq = 0;
+
 export function speak(text, { voice = "", lang = "hi-IN", pitch = 1, rate = 1, onEnd } = {}) {
+  if (!text) { onEnd && onEnd(); return; }
+  const mySeq = ++speakSeq;                 // a newer speak()/stopSpeaking() cancels this one
+  const browserTts = () => {
+      if (mySeq !== speakSeq) { onEnd && onEnd(); return; }
+      // 2) Browser speechSynthesis (mock mode)
+      if (!("speechSynthesis" in window)) { onEnd && onEnd(); return; }
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickVoice(lang);
+      if (v) u.voice = v;
+      u.lang = v?.lang || lang || "hi-IN";
+      u.pitch = pitch;
+      u.rate = rate;
+      let done = false;
+      const finish = () => { if (!done) { done = true; onEnd && onEnd(); } };
+      u.onend = finish;
+      u.onerror = finish;
+      window.speechSynthesis.speak(u);
+      // safety net sized to the text, in case the browser never fires onend
+      setTimeout(finish, Math.min(60000, 4000 + text.length * 110));
+  };
+  if (cloudTts === false) { browserTts(); return; }
+
   // 1) cloud TTS (backend proxies; returns audio/wav when configured)
-  fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`)
+  fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`,
+        { headers: authHeaders() })
     .then(async (r) => {
+      if (r.status === 204) cloudTts = false;      // no key on the server: stop asking
       if (r.status === 204 || !r.ok) throw new Error("no timbre");
+      if (mySeq !== speakSeq) { onEnd && onEnd(); return; }
       const blob = await r.blob();
       if (blob.size < 100) throw new Error("empty audio");
       stopListeningIfRecording();
@@ -161,42 +213,33 @@ export function speak(text, { voice = "", lang = "hi-IN", pitch = 1, rate = 1, o
       await audio.play().catch(finish);
       setTimeout(finish, 30000);
     })
-    .catch(() => {
-      // 2) Browser speechSynthesis (mock mode)
-      if (!("speechSynthesis" in window)) { onEnd && onEnd(); return; }
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      const v = pickVoice();
-      if (v) u.voice = v;
-      u.lang = v?.lang || "hi-IN";
-      u.pitch = pitch;
-      u.rate = rate;
-      let done = false;
-      const finish = () => { if (!done) { done = true; onEnd && onEnd(); } };
-      u.onend = finish;
-      u.onerror = finish;
-      window.speechSynthesis.speak(u);
-      setTimeout(finish, 12000);
-    });
+    .catch(browserTts);
 }
 
 function stopListeningIfRecording() { /* mic+speaker echo guard placeholder */ }
 
 // Warm the browser voice list (Chrome loads async)
-let cachedVoice = null;
-function pickVoice() {
-  if (cachedVoice) return cachedVoice;
+// Voice for the reply language (Marathi/Tamil replies are in native script, so a
+// Hindi voice cannot read Tamil); falls back to Hindi, then Indian English.
+let voiceCache = {};
+function pickVoice(lang = "hi-IN") {
+  if (lang in voiceCache) return voiceCache[lang];
   const vs = window.speechSynthesis?.getVoices?.() || [];
-  cachedVoice =
-    vs.find((v) => /hi-IN/i.test(v.lang)) ||
-    vs.find((v) => /en-IN/i.test(v.lang)) ||
-    vs.find((v) => /hi|in/i.test(v.lang)) ||
+  if (!vs.length) return null;               // list not loaded yet — don't cache
+  const norm = (l) => (l || "").replace("_", "-").toLowerCase();
+  const short = lang.slice(0, 2).toLowerCase();
+  voiceCache[lang] =
+    vs.find((v) => norm(v.lang) === lang.toLowerCase()) ||
+    vs.find((v) => norm(v.lang).startsWith(short)) ||
+    vs.find((v) => norm(v.lang) === "hi-in") ||
+    vs.find((v) => norm(v.lang).startsWith("hi")) ||
+    vs.find((v) => norm(v.lang) === "en-in") ||
     vs[0] || null;
-  return cachedVoice;
+  return voiceCache[lang];
 }
 if (typeof window !== "undefined" && "speechSynthesis" in window) {
   window.speechSynthesis.getVoices();
-  window.speechSynthesis.onvoiceschanged = () => { cachedVoice = null; };
+  window.speechSynthesis.onvoiceschanged = () => { voiceCache = {}; };
 }
 
 // ---------- recording helper (voice enroll) ----------
@@ -210,5 +253,6 @@ export async function recordClip(ms = 5000) {
   setTimeout(() => mr.stop(), ms);
   await done;
   stream.getTracks().forEach((t) => t.stop());
-  return new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+  // the backend's speaker model reads WAV, not the browser's webm/opus
+  return await blobToWav16k(new Blob(chunks, { type: mr.mimeType || "audio/webm" }));
 }

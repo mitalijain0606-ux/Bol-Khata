@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { api } from "../api.js";
-import { recordClip, speechSupported } from "../voice.js";
+import { recordClip, micSupported } from "../voice.js";
 
 export default function Settings({ me, onSaved, onLogout }) {
   const [enrollState, setEnrollState] = useState("");
   const [busy, setBusy] = useState(false);
 
   const enroll = async () => {
-    if (!speechSupported()) {
-      setEnrollState("Mic recording ke liye Chrome use karo.");
+    if (!micSupported()) {
+      setEnrollState("Is browser me mic recording nahi chalti — Chrome ya Edge use kariye.");
       return;
     }
     setBusy(true);
@@ -24,7 +24,9 @@ export default function Settings({ me, onSaved, onLogout }) {
       );
       onSaved && onSaved();
     } catch (e) {
-      setEnrollState("Recording fail: " + e.message);
+      setEnrollState(e.name === "NotAllowedError"
+        ? "Mic ki permission chahiye — browser me mic allow kijiye."
+        : "Recording fail: " + e.message);
     }
     setBusy(false);
   };
@@ -45,8 +47,9 @@ export default function Settings({ me, onSaved, onLogout }) {
       <div className="card">
         <h3>Awaaz ka lock</h3>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
-          Apni awaaz enroll karo — uske baad entries delete/settle sirf aapki awaaz
-          bolke hongi. Customer ki awaaz se kuch nahi badlega.
+          Apni awaaz enroll karo taaki app malik ki awaaz pehchaan sake. Abhi hisaab
+          clear karne se pehle app "haan/nahi" poochta hai; awaaz-match ko har command
+          par lagana agla kadam hai.
         </div>
         <button className="btn" onClick={enroll} disabled={busy}>
           {busy ? "record ho raha hai…" : "🎙️ Meri awaaz enroll karo (5 sec)"}

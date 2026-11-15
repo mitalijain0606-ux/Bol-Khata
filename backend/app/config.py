@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BACKEND_DIR / ".env")
 
-DATA_DIR = BACKEND_DIR / "data"
-DATA_DIR.mkdir(exist_ok=True)
+# BOLKHATA_DATA_DIR lets tests (or a second demo) use a separate database folder
+DATA_DIR = Path(os.getenv("BOLKHATA_DATA_DIR") or BACKEND_DIR / "data")
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_DIR = DATA_DIR / "audio"
 AUDIO_DIR.mkdir(exist_ok=True)
 

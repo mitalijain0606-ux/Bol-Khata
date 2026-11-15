@@ -31,16 +31,25 @@ def _load():
 
 
 def _embedding(wav_path: str | Path):
-    import torch
-    model = _load()
-    if model is None:
+    """Embedding tensor, or None when the optional libs are missing or the audio
+    cannot be decoded (never raises — the API answers 'unavailable' instead of 500)."""
+    try:
+        model = _load()
+        if model is None:
+            return None
+        import torch
+        import torchaudio
+        signal, fs = torchaudio.load(str(wav_path))
+        if signal.shape[0] > 1:                      # stereo -> mono
+            signal = signal.mean(dim=0, keepdim=True)
+        if fs != 16000:
+            signal = torchaudio.functional.resample(signal, fs, 16000)
+        with torch.no_grad():
+            emb = model.encode_batch(signal)
+        return emb.squeeze()
+    except Exception as e:  # noqa: BLE001
+        log.warning("voice embedding failed: %s", e)
         return None
-    signal, fs = __import__("torchaudio").load(str(wav_path))
-    if fs != 16000:
-        signal = __import__("torchaudio").functional.resample(signal, fs, 16000)
-    with torch.no_grad():
-        emb = model.encode_batch(signal)
-    return emb.squeeze()
 
 
 def enroll(shopkeeper_id: int, wav_bytes: bytes) -> dict:
@@ -49,7 +58,11 @@ def enroll(shopkeeper_id: int, wav_bytes: bytes) -> dict:
     path.write_bytes(wav_bytes)
     emb = _embedding(path)
     if emb is None:
-        return {"ok": False, "reason": "speechbrain not installed — voice lock offline"}
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        return {"ok": False, "reason": "speechbrain not installed (or audio unreadable) — voice lock offline"}
     emb_path = AUDIO_DIR / f"owner_{shopkeeper_id}_emb.pt"
     import torch
     torch.save(emb, emb_path)
