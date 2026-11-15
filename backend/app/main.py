@@ -40,6 +40,25 @@ def startup():
         T.expire_promises(conn)     # wade whose date passed while the server was off
 
 
+_HITS: dict[str, list[float]] = {}
+
+
+def _limit(key: str, per_min: int):
+    """Small in-memory sliding-window limiter (one process is all this app runs)."""
+    import time
+    now = time.time()
+    hits = [t for t in _HITS.get(key, []) if now - t < 60]
+    if len(hits) >= per_min:
+        raise HTTPException(429, "Thoda ruk ke try kijiye — bahut saari requests aa gayi.")
+    hits.append(now)
+    _HITS[key] = hits
+
+
+def _ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for", "")
+    return fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+
 def _sid(request: Request) -> int:
     """Shopkeeper id from the Bearer token. No token -> 401 (it used to fall back
     to the demo account, which exposed that ledger to anyone)."""
@@ -69,7 +88,8 @@ def _clean_phone(p: str) -> str:
 
 
 @app.post("/api/auth/register")
-def register(r: RegisterIn):
+def register(r: RegisterIn, request: Request):
+    _limit("reg:" + _ip(request), 5)
     phone = _clean_phone(r.phone)
     if not phone:
         raise HTTPException(400, "Sahi 10-digit phone number daaliye")
@@ -91,7 +111,8 @@ def register(r: RegisterIn):
 
 
 @app.post("/api/auth/login")
-def login(r: LoginIn):
+def login(r: LoginIn, request: Request):
+    _limit("login:" + _ip(request), 15)
     phone = _clean_phone(r.phone)
     with db() as conn:
         row = conn.execute("SELECT * FROM shopkeeper WHERE phone = ?", (phone,)).fetchone()
@@ -289,7 +310,7 @@ class UtterIn(BaseModel):
 @app.post("/api/stt")
 async def stt_proxy(request: Request, file: UploadFile = File(...), lang: str = ""):
     """Mic audio (wav, recorded+encoded in browser) -> cloud STT -> transcript."""
-    _sid(request)   # the speech key is paid — logged-in users only
+    _limit(f"stt:{_sid(request)}", 30)   # the speech key is paid — logged-in users only
     try:
         audio = await file.read()
         text = await stt.transcribe_clip(audio, lang=lang)
@@ -310,7 +331,9 @@ async def voice_command(u: UtterIn, request: Request):
 @app.post("/api/voice/agent")
 async def voice_agent(u: UtterIn, request: Request):
     """Full brain: cloud reasoning if configured, rules otherwise."""
-    return await handle_utterance(u.text, u.lang, _sid(request))
+    sid = _sid(request)
+    _limit(f"agent:{sid}", 40)
+    return await handle_utterance(u.text, u.lang, sid)
 
 
 # ---------------- trust scores / briefing ----------------
@@ -334,7 +357,7 @@ async def tts_proxy(request: Request, text: str, voice: str = "", lang: str = "h
     if not settings.tts_configured:
         # mock mode: tell the browser to use its own speechSynthesis (204 = no body)
         return Response(status_code=204)
-    _sid(request)   # the speech key is paid — logged-in users only
+    _limit(f"tts:{_sid(request)}", 60)   # the speech key is paid — logged-in users only
     try:
         audio = await tts.synthesize(text, voice=voice, lang=lang)
         return Response(content=audio, media_type="audio/wav")
@@ -349,6 +372,7 @@ async def tts_proxy(request: Request, text: str, voice: str = "", lang: str = "h
 
 @app.post("/api/call/start/{cid}")
 def call_start(cid: int, request: Request):
+    _limit("call:" + _ip(request), 10)
     sid = _sid(request)
     with db() as conn:
         own = conn.execute(

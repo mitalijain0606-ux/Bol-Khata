@@ -206,6 +206,33 @@ class API(unittest.TestCase):
         self.assertTrue(all(0 <= s["score"] <= 100 for s in scores))
         self.assertGreater(len({s["band"] for s in scores}), 1)     # a real spread, not all one band
 
+    def test_new_customer_is_not_pakka(self):
+        self.say("Navin ji ko 250 ka udhaar likh do")
+        s = next(x for x in self.c.get("/api/trust-scores", headers=self.demo).json() if x["customer"] == "Navin")
+        self.assertEqual((s["band"], s["score"]), ("Naya", 60))
+        self.assertEqual(self.say("Navin ji ko 1000 udhaar du kya")["data"]["decision"], "careful")
+
+    def test_tokens_cannot_be_forged_or_reused_after_expiry(self):
+        from app import auth
+        tok = auth.make_token(1)
+        self.assertEqual(auth.sid_from_token(tok), 1)
+        sid, exp, sig = tok.split(".")
+        self.assertIsNone(auth.sid_from_token(f"2.{exp}.{sig}"))             # other account
+        self.assertIsNone(auth.sid_from_token(f"1.{int(exp) + 999}.{sig}"))   # extended expiry
+        self.assertIsNone(auth.sid_from_token(f"1.{sig}"))                    # old token format
+        import hmac, hashlib
+        old = f"1.{int(exp) - auth.TOKEN_TTL - 10}"
+        old_sig = hmac.new(auth._secret(), old.encode(), hashlib.sha256).hexdigest()[:32]
+        self.assertIsNone(auth.sid_from_token(f"{old}.{old_sig}"))            # expired
+
+    def test_rate_limit(self):
+        from app import main
+        main._HITS.clear()
+        for _ in range(15):
+            self.c.post("/api/auth/login", json={"phone": "9999999999", "password": "x"})
+        self.assertEqual(self.c.post("/api/auth/login", json={"phone": "9999999999", "password": "x"}).status_code, 429)
+        main._HITS.clear()
+
     def test_voice_enroll_never_crashes(self):
         r = self.c.post("/api/shopkeeper/1/enroll", files={"file": ("a.wav", b"\\0" * 5000, "audio/wav")})
         self.assertEqual(r.status_code, 401)

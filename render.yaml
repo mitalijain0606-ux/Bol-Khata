@@ -1,0 +1,23 @@
+# Render Blueprint — New → Blueprint → pick this repo.
+# Secrets marked sync: false are asked for once in the Render dashboard.
+services:
+  - type: web
+    name: bol-khata
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: SPEECH_API_KEY        # Gnani Vachana key (Prisma + Timbre)
+        sync: false
+      - key: LLM_API_URL
+        value: https://api.groq.com/openai/v1/chat/completions
+      - key: LLM_MODEL
+        value: openai/gpt-oss-20b
+      - key: LLM_API_KEY           # Groq key (gsk_...)
+        sync: false
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: SEED_ON_START
+        value: "1"

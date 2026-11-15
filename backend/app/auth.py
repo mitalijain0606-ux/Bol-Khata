@@ -1,14 +1,22 @@
 """Phone + password auth — stdlib only (pbkdf2 + HMAC tokens)."""
 import hashlib
 import hmac
+import os
 import secrets
+import time
 
 from app.config import DATA_DIR
 
 SECRET_FILE = DATA_DIR / ".auth_secret"
 
 
+TOKEN_TTL = 30 * 24 * 3600
+
+
 def _secret() -> bytes:
+    env = os.getenv("AUTH_SECRET", "").strip()
+    if env:                       # set on the host so logins survive restarts
+        return env.encode()
     if SECRET_FILE.exists():
         return SECRET_FILE.read_bytes()
     s = secrets.token_bytes(32)
@@ -32,9 +40,10 @@ def verify_password(pw: str, stored: str) -> bool:
 
 
 def make_token(sid: int) -> str:
-    payload = str(sid).encode()
-    sig = hmac.new(_secret(), payload, hashlib.sha256).hexdigest()[:32]
-    return f"{sid}.{sig}"
+    exp = int(time.time()) + TOKEN_TTL
+    payload = f"{sid}.{exp}"
+    sig = hmac.new(_secret(), payload.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{payload}.{sig}"
 
 
 def sid_from_token(token: str | None) -> int | None:
@@ -42,9 +51,11 @@ def sid_from_token(token: str | None) -> int | None:
         return None
     token = token.replace("Bearer ", "").strip()
     try:
-        sid_s, sig = token.split(".", 1)
-        sid = int(sid_s)
+        sid_s, exp_s, sig = token.split(".", 2)
+        sid, exp = int(sid_s), int(exp_s)
     except ValueError:
         return None
-    expect = hmac.new(_secret(), sid_s.encode(), hashlib.sha256).hexdigest()[:32]
-    return sid if hmac.compare_digest(sig, expect) else None
+    expect = hmac.new(_secret(), f"{sid_s}.{exp_s}".encode(), hashlib.sha256).hexdigest()[:32]
+    if not hmac.compare_digest(sig, expect) or exp < time.time():
+        return None
+    return sid

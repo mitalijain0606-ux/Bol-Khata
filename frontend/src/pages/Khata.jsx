@@ -46,7 +46,7 @@ export default function Khata({ gnani, onNav, me }) {
     setBusy(true);
     say(text, "you");
     try {
-      const res = await api.command(text, lang); // rule brain; LLM upgrades this server-side
+      const res = await api.command(text, lang); // LLM agent when configured; rules for risky intents and fallback
       say(res.reply, "agent", {
         confirm: res.action === "CONFIRM_SETTLE",
         advice: res.action === "LEND_ADVICE" ? res.data.decision : null,

@@ -86,7 +86,11 @@ def compute(conn, customer_id: int) -> dict:
         parts.append(f"+{min(20, kept * 5)} bonus ({kept} wade poore kiye)")
         score = min(100, score + min(20, kept * 5))
 
-    if score >= 80:
+    if not payments and not promises:
+        # nothing paid back and no promise kept or broken yet: no evidence either way
+        score = 60 - 5 * stale_active
+        band, one = "Naya", "Naya customer — abhi koi payment history nahi. Chhote udhaar se shuru kijiye."
+    elif score >= 80:
         band, one = "Pakka", "Bharosa kar sakte hain — time pe deta hai."
     elif score >= 55:
         band, one = "Theek-thaak", "Dete hai par der se — chhota udhaar theek hai."

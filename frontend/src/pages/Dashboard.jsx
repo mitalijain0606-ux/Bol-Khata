@@ -4,7 +4,7 @@ import { speak, stopSpeaking } from "../voice.js";
 import { fmt } from "../util.js";
 import CustomerDetail from "./CustomerDetail.jsx";
 
-const RING_COLORS = { Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--orange)", Risky: "var(--red)" };
+const RING_COLORS = { Naya: "var(--blue)", Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--orange)", Risky: "var(--red)" };
 
 export default function Dashboard({ onNav, me }) {
   const [openCid, setOpenCid] = useState(null);

@@ -397,7 +397,8 @@ _RULES_ONLY = {"SETTLE", "UNDO", "LEND"}
 
 async def handle_utterance(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
     """Main entry: the rule engine owns risky intents, the LLM handles the rest."""
-    if evon_settings_ready():
+    # the LLM path replies in Hinglish; Marathi/Tamil keep the native-script rule replies
+    if evon_settings_ready() and (lang or "hi-IN")[:2] == "hi":
         intent = nlu.classify(nlu.transliterate(text), lang)
         if intent not in _RULES_ONLY and sid not in _PENDING_SETTLE:
             result = await evon_reply(text, sid)

@@ -53,7 +53,7 @@ export const api = {
   briefing: () => get("/api/briefing"),
 
   // rule-engine brain (free) — LLM upgrades server-side
-  command: (text, lang = "hi-IN") => post("/api/voice/command", { text, lang }),
+  command: (text, lang = "hi-IN") => post("/api/voice/agent", { text, lang }),
 
   tts: (text, voice = "", lang = "hi-IN") =>
     fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`,
