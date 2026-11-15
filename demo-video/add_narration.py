@@ -49,7 +49,8 @@ async def synth_all(lines, voice, lang, outdir):
         sys.exit("backend/.env has no SPEECH_API_KEY — add it first (python -m scripts.health_check should say TTS OK).")
     outdir.mkdir(exist_ok=True)
     raws = []
-    for i, (_, _, text) in enumerate(lines):
+    for i, line in enumerate(lines):
+        text = line[3] if len(line) > 3 else line[2]      # spoken text, if it differs from the caption
         raw = outdir / f"{i:02d}.raw.wav"
         if not raw.exists():
             raw.write_bytes(await synthesize(text, voice=voice, lang=lang))
@@ -74,7 +75,8 @@ def main():
     raws = asyncio.run(synth_all(lines, a.voice, a.lang, outdir))
 
     clips = []
-    for i, ((start, end, _), raw) in enumerate(zip(lines, raws)):
+    for i, (line, raw) in enumerate(zip(lines, raws)):
+        start, end = line[0], line[1]
         norm = outdir / f"{i:02d}.wav"
         subprocess.run([ff, "-y", "-loglevel", "error", "-i", str(raw), "-ar", "48000", "-ac", "2", str(norm)], check=True)
         dur, slot = wav_seconds(norm), end - start
