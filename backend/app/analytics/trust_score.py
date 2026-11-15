@@ -6,6 +6,13 @@ Pure SQLite, no black box. Frontend shows the breakdown.
 from datetime import date, datetime
 
 
+LATE_AFTER_DAYS = 15
+
+
+def _day(ts: str) -> date:
+    return datetime.fromisoformat(ts).date()
+
+
 def compute(conn, customer_id: int) -> dict:
     cust = conn.execute("SELECT * FROM customer WHERE id = ?", (customer_id,)).fetchone()
 
@@ -22,13 +29,25 @@ def compute(conn, customer_id: int) -> dict:
         (customer_id,),
     ).fetchall()
 
-    # payments vs udhaars timeline -> late count
-    udhaar_dates = [datetime.fromisoformat(r["created_at"]).date() for r in udhaar_rows if r["created_at"]]
+    # A payment is LATE when the oldest udhaar it pays off was already more than
+    # 15 days old. Payments are matched to udhaar first-in-first-out, so a regular
+    # customer who keeps buying and keeps paying is not punished for being old.
+    udhaar_dates = [_day(r["created_at"]) for r in udhaar_rows if r["created_at"]]
+    queue = sorted(([_day(r["created_at"]), float(r["amount"])] for r in udhaar_rows if r["created_at"]),
+                   key=lambda x: x[0])
     late_payments = 0
-    for p in payments:
-        d = datetime.fromisoformat(p["created_at"]).date() if p["created_at"] else None
-        if d and udhaar_dates and (d - min(udhaar_dates)).days > 15:
+    for p in sorted(payments, key=lambda r: r["created_at"] or ""):
+        if not p["created_at"]:
+            continue
+        d, left = _day(p["created_at"]), float(p["amount"])
+        if queue and queue[0][0] <= d and (d - queue[0][0]).days > LATE_AFTER_DAYS:
             late_payments += 1
+        while left > 0 and queue and queue[0][0] <= d:
+            take = min(left, queue[0][1])
+            queue[0][1] -= take
+            left -= take
+            if queue[0][1] <= 0.005:
+                queue.pop(0)
 
     broken = sum(1 for p in promises if p["status"] == "BROKEN")
     kept = sum(1 for p in promises if p["status"] == "KEPT")
@@ -50,7 +69,8 @@ def compute(conn, customer_id: int) -> dict:
     ).fetchone()
     balance = float(bal_rows["u"]) - float(bal_rows["p"])
 
-    stale_active = 1 if balance > 0 and udhaar_dates and (today - max(udhaar_dates)).days > 30 else 0
+    # stale = the oldest udhaar still unpaid has been sitting for 30+ days
+    stale_active = 1 if balance > 0 and queue and (today - queue[0][0]).days > 30 else 0
 
     score = 100 - 25 * broken - 10 * late_payments - 5 * stale_active
     score = max(0, min(100, score))
@@ -96,6 +116,8 @@ def compute(conn, customer_id: int) -> dict:
 
 
 def all_scores(conn, shopkeeper_id: int = 1) -> list[dict]:
+    from app.agent.tools import expire_promises
+    expire_promises(conn, shopkeeper_id)
     out = []
     for row in conn.execute(
         "SELECT id FROM customer WHERE shopkeeper_id = ? ORDER BY id", (shopkeeper_id,)

@@ -3,31 +3,29 @@ import { api } from "../api.js";
 import { speak, stopSpeaking } from "../voice.js";
 import { fmt } from "./Khata.jsx";
 
-const RING_COLORS = { Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--blue)", Risky: "var(--red)" };
+const RING_COLORS = { Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--orange)", Risky: "var(--red)" };
 
 export default function Dashboard({ onNav }) {
   const [brief, setBrief] = useState(null);
-  const [scores, setScores] = useState([]);
+  const [scores, setScores] = useState(null); // null = loading
   const [totals, setTotals] = useState(null);
   const [open, setOpen] = useState(null);
 
   useEffect(() => {
     api.briefing().then(setBrief).catch(() => {});
-    api.trustScores().then(setScores).catch(() => {});
+    api.trustScores().then(setScores).catch(() => setScores([]));
     api.totals().then(setTotals).catch(() => {});
     return () => stopSpeaking();
   }, []);
 
   const playBriefing = () => brief && speak(brief.reply, { pitch: 1, rate: 1 });
 
-  const recovered = totals ? Math.max(0, totals.cash_in_total) : 0;
-
   return (
     <>
       <div className="card">
         <div className="row">
           <div className="stat">
-            <div className="num amber">{totals ? fmt(totals.udhaar_total) : "—"}</div>
+            <div className="num amber">{totals ? fmt(totals.outstanding ?? totals.udhaar_total) : "—"}</div>
             <div className="lbl">Atka udhaar</div>
           </div>
           <div className="stat">
@@ -48,9 +46,10 @@ export default function Dashboard({ onNav }) {
 
       <div className="card">
         <h3>Bharaut-Score — kise udhaar dena chahiye</h3>
-        {scores.length === 0 && <div className="empty">Data load ho raha hai…</div>}
-        {scores.map((s) => (
-          <div key={s.customer}>
+        {scores === null && <div className="empty">Data load ho raha hai…</div>}
+        {scores?.length === 0 && <div className="empty">Abhi koi customer nahi — pehli entry bolke likhiye.</div>}
+        {(scores || []).map((s, i) => (
+          <div key={s.customer + i}>
             <div className="score-row" onClick={() => setOpen(open === s.customer ? null : s.customer)}>
               <div className="ring" style={{ "--p": s.score, "--ring-c": RING_COLORS[s.band] || "var(--green)" }}>
                 <i>{s.score}</i>

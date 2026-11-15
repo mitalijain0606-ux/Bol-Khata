@@ -21,11 +21,24 @@ export default function CallScreen({ gnani }) {
   const autoRef = useRef(true);
   const callIdRef = useRef(null);
   const custVoiceRef = useRef("Deepak");
+  const stepLock = useRef(false);   // one step at a time (auto-advance + button share it)
+  const endedRef = useRef(true);    // call finished / hung up -> late callbacks do nothing
+  const [err, setErr] = useState("");
   const CUST_VOICES = ["Deepak", "Nalini", "Kaveri"];
 
-  useEffect(() => {
+  const loadCustomers = () =>
     api.customers().then((cs) => setCustomers(cs.filter((c) => c.balance > 0))).catch(() => {});
-    return () => stopSpeaking();
+
+  useEffect(() => {
+    loadCustomers();
+    return () => {              // leaving the tab mid-call: stop talking, save what happened
+      autoRef.current = false;
+      stopSpeaking();
+      if (!endedRef.current && callIdRef.current) {
+        endedRef.current = true;
+        api.callEnd(callIdRef.current).catch(() => {});
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -52,7 +65,17 @@ export default function CallScreen({ gnani }) {
 
   const startCall = async (c) => {
     stopSpeaking();
-    const res = await api.callStart(c.id);
+    setErr("");
+    let res;
+    try {
+      res = await api.callStart(c.id);
+    } catch (e) {
+      setErr("Call shuru nahi ho payi: " + e.message);
+      return;
+    }
+    endedRef.current = false;
+    stepLock.current = false;
+    setStepBusy(false);
     setCall(res);
     callIdRef.current = res.call_id;
     custVoiceRef.current = CUST_VOICES[c.id % CUST_VOICES.length];
@@ -60,10 +83,12 @@ export default function CallScreen({ gnani }) {
     setResult(null);
     setPhase("live");
     autoRef.current = true;
-    await speakSeq("agent", res.agent);
     push("agent", res.agent);
-    await speakSeq("customer", res.customer_line);
+    await speakSeq("agent", res.agent);
+    if (endedRef.current) return;
     push("customer", res.customer_line);
+    await speakSeq("customer", res.customer_line);
+    if (endedRef.current) return;
     autoAdvance();
   };
 
@@ -82,21 +107,27 @@ export default function CallScreen({ gnani }) {
   };
 
   const doStep = async () => {
-    if (!callIdRef.current || stepBusy) return null;
+    if (!callIdRef.current || stepLock.current || endedRef.current) return null;
+    stepLock.current = true;
     setStepBusy(true);
     try {
       const s = await api.callStep(callIdRef.current);
-      await speakSeq("agent", s.agent);
+      if (endedRef.current) return null;
       push("agent", s.agent);
-      await speakSeq("customer", s.customer);
+      await speakSeq("agent", s.agent);
+      if (endedRef.current) return null;
       push("customer", s.customer);
+      await speakSeq("customer", s.customer);
+      if (endedRef.current) return null;
       if (s.done) {
+        endedRef.current = true;
+        autoRef.current = false;
         const end = await api.callEnd(callIdRef.current);
         showResult(end, s);
-        return s;
       }
       return s;
     } finally {
+      stepLock.current = false;
       setStepBusy(false);
     }
   };
@@ -113,6 +144,8 @@ export default function CallScreen({ gnani }) {
       if (t) bargeIn(t);
       return;
     }
+    autoRef.current = false;      // aap bol rahe ho -> agent ruk jata hai
+    stopSpeaking();
     startListening(
       null,
       (final) => { if (final) bargeIn(final); },
@@ -121,20 +154,33 @@ export default function CallScreen({ gnani }) {
   };
 
   const bargeIn = async (text) => {
-    if (!callIdRef.current) return;
+    if (!callIdRef.current || endedRef.current) return;
+    autoRef.current = false;
     stopSpeaking();
     push("agent", "(aap) " + text);
-    const r = await api.callSay(callIdRef.current, text);
-    if (r.customer) {
-      await speakSeq("customer", r.customer);
-      push("customer", r.customer);
+    try {
+      const r = await api.callSay(callIdRef.current, text);
+      if (r.customer && !endedRef.current) {
+        push("customer", r.customer);
+        await speakSeq("customer", r.customer);
+      }
+    } catch (e) {
+      setErr("Baat nahi pahunchi: " + e.message);
     }
   };
 
   const hangUp = async () => {
     autoRef.current = false;
+    if (endedRef.current) return;
+    endedRef.current = true;
     stopSpeaking();
-    try { const end = await api.callEnd(callIdRef.current); showResult(end, {}); } catch {}
+    try {
+      const end = await api.callEnd(callIdRef.current);
+      showResult(end, {});
+    } catch {
+      setPhase("list");          // call already gone (server restart) — back to the list
+      loadCustomers();
+    }
   };
 
   // ---------- render ----------
@@ -145,8 +191,9 @@ export default function CallScreen({ gnani }) {
         <h2 className="pagetitle">Vasooli calls — kaun call karein?</h2>
         <div className="card">
           <h3>Udhaar baaki customers</h3>
+          {err && <div className="auth-err">{err}</div>}
           {customers.length === 0 && <div className="empty">Sab ka hisaab clear hai! 🎉</div>}
-          {customers
+          {[...customers]
             .sort((a, b) => b.balance - a.balance)
             .map((c) => {
               const pm = PERSONA_META[c.persona] || { emoji: "👤", label: "Customer" };
@@ -206,7 +253,7 @@ export default function CallScreen({ gnani }) {
   if (phase === "result" && result) {
     return (
       <div className="card result-card">
-        <div style={{ fontSize: 44 }}>{result.promise ? "✅" : result.partial_today ? "🤝" : "❌"}</div>
+        <div style={{ fontSize: 44 }}>{result.partial_today ? "🤝" : result.promise ? "✅" : "❌"}</div>
         <div className="big">{result.summary}</div>
         {result.promise && (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
@@ -217,7 +264,7 @@ export default function CallScreen({ gnani }) {
           Sentiment: {result.sentiment} · Outcome: {result.outcome}
         </div>
         <div className="call-actions">
-          <button className="btn ghost" onClick={() => { setPhase("list"); setResult(null); }}>← Wapas list</button>
+          <button className="btn ghost" onClick={() => { setPhase("list"); setResult(null); loadCustomers(); }}>← Wapas list</button>
           <button className="btn green" onClick={() => window.location.reload()}>Khata dekho</button>
         </div>
       </div>

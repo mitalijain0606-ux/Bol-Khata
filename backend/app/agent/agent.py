@@ -70,11 +70,22 @@ TOOL_FNS = {"add_entry", "query_balance", "totals_today", "list_dues", "briefing
 def run_tool(name: str, args: dict, transcript: str = "", sid: int = 1) -> dict:
     with db() as conn:
         if name == "add_entry":
-            cust = T.find_or_create_customer(conn, args.get("customer_name", ""), shopkeeper_id=sid)
-            if not cust or not args.get("amount"):
-                return {"error": "customer ya amount missing"}
-            T.add_entry(conn, cust["id"], args.get("kind", "UDHAAR"),
-                        float(args["amount"]), args.get("items_text", ""), transcript, shopkeeper_id=sid)
+            kind = str(args.get("kind") or "UDHAAR").upper()
+            try:
+                amount = float(args.get("amount") or 0)
+            except (TypeError, ValueError):
+                amount = 0.0
+            cname = args.get("customer_name", "")
+            # a payment never invents a customer; an udhaar entry may
+            cust = (T.find_customer(conn, cname, sid) if kind == "PAYMENT"
+                    else T.find_or_create_customer(conn, cname, shopkeeper_id=sid))
+            if not cust or amount <= 0 or kind not in ("UDHAAR", "PAYMENT"):
+                return {"reply": "Customer ka naam ya amount clear nahi tha — dobara boliye.",
+                        "action": "NEED_AMOUNT", "data": {}}
+            args = {**args, "kind": kind, "amount": amount}
+            T.add_entry(conn, cust["id"], kind, amount, args.get("items_text", ""), transcript, shopkeeper_id=sid)
+            if kind == "PAYMENT":
+                T.settle_due_promises(conn, cust["id"], amount)
             bal = T.customer_balance(conn, cust["id"])
             kind_word = "udhaar lagaya" if args.get("kind") == "UDHAAR" else "paisa jama kiya"
             return {
@@ -92,11 +103,7 @@ def run_tool(name: str, args: dict, transcript: str = "", sid: int = 1) -> dict:
             return {"reply": f"{cust['name']} ka total bakipada {T.fmt_money(bal)} hai.",
                     "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
         if name == "totals_today":
-            tot = T.totals(conn, sid)
-            return {"reply": f"Aaj ka udhaar {T.fmt_money(tot['udhaar_today'])} bana, "
-                             f"cash aaya {T.fmt_money(tot['cash_in_today'])}. "
-                             f"Kul udhaar abhi {T.fmt_money(tot['udhaar_total'])} par hai.",
-                    "action": "TOTALS", "data": tot}
+            return _totals_reply(conn, "hi-IN", sid)
         if name == "list_dues":
             dues = [c for c in T.customers_with_dues(conn, sid) if c["balance"] > 0]
             if not dues:
@@ -110,6 +117,7 @@ def run_tool(name: str, args: dict, transcript: str = "", sid: int = 1) -> dict:
             cust = T.find_customer(conn, args.get("customer_name", ""), sid)
             if not cust:
                 return {"reply": "Ye customer khata me nahi mila.", "action": "NOT_FOUND", "data": {}}
+            T.expire_promises(conn, sid)
             res = trust_score.compute(conn, cust["id"])
             return {"reply": f"{cust['name']} ka bharaut-score {res['score']}/100 hai. {res['one_liner']}",
                     "action": "TRUST_SCORE", "data": res}
@@ -127,6 +135,8 @@ REPLIES = {
         "totals": "आजचा उधार {u}, रोख आली {c}. एकूण उधार {t}.",
         "need_amount": "कितीचा उधार लावायचा? रक्कम सांगा.",
         "need_name": "कोणाच्या नावावर लिहायची? नाव सांगा.",
+        "not_found": "{name} खात्यात नाही.",
+        "settled": "{name} चा हिशेब पूर्ण क्लिअर — {amt} सेटल.",
         "unknown": "समजले नाही, पुन्हा सांगा.",
     },
     "ta-IN": {
@@ -136,6 +146,8 @@ REPLIES = {
         "totals": "இன்றைய கடன் {u}, வரவு {c}. மொத்த கடன் {t}.",
         "need_amount": "எவ்வளவு கடன் சேர்க்கவேண்டும்? தொகையை சொல்லுங்கள்.",
         "need_name": "யார் பெயரில் எழுதவேண்டும்? பெயரை சொல்லுங்கள்.",
+        "not_found": "{name} கணக்கில் இல்லை.",
+        "settled": "{name} கணக்கு முழுவதும் முடிந்தது — {amt} செலுத்தப்பட்டது.",
         "unknown": "புரியவில்லை, மீண்டும் சொல்லுங்கள்.",
     },
 }
@@ -146,8 +158,18 @@ def _reply(lang: str, key: str, **kw) -> str:
     return tpl.format(**kw) if tpl else ""
 
 
+def _totals_reply(conn, lang: str, sid: int) -> dict:
+    tot = T.totals(conn, sid)
+    u, c, t = (T.fmt_money(tot["udhaar_today"]), T.fmt_money(tot["cash_in_today"]),
+               T.fmt_money(tot["outstanding"]))
+    reply = _reply(lang, "totals", u=u, c=c, t=t) or (
+        f"Aaj ka udhaar {u} bana, cash aaya {c}. Kul baki udhaar abhi {t} par hai.")
+    return {"reply": reply, "action": "TOTALS", "data": tot}
+
+
 def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
-    text = nlu.transliterate(text)  # cloud STT transcripts arrive in native scripts
+    raw = text                      # audit trail keeps exactly what was spoken
+    text = nlu.transliterate(text)  # STT transcripts arrive in native scripts
     intent = nlu.classify(text, lang)
     amount = nlu.parse_amount(text, lang)
     native = lang in REPLIES  # Marathi/Tamil reply in native script for the voice
@@ -160,10 +182,15 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
             if not amount:
                 return {"reply": _reply(lang, "need_amount") or "Kitne ka payment aaya? Amount bol dijiye.",
                         "action": "NEED_AMOUNT", "data": {}}
-            cust = T.find_or_create_customer(conn, name, shopkeeper_id=sid) if name else None
+            if not name:
+                return {"reply": _reply(lang, "need_name") or "Kis customer ne diye? Naam bhi bol dijiye.",
+                        "action": "NEED_NAME", "data": {}}
+            cust = T.find_customer(conn, name, sid)
             if not cust:
-                return {"reply": "Kis customer ne diye? Naam bhi bol dijiye.", "action": "NEED_NAME", "data": {}}
-            T.add_entry(conn, cust["id"], "PAYMENT", amount, nlu.items_from(text), text, shopkeeper_id=sid)
+                return {"reply": _reply(lang, "not_found", name=name) or
+                                 f"{name} khata me nahi hai — pehle unka udhaar likhiye.",
+                        "action": "NOT_FOUND", "data": {}}
+            T.add_entry(conn, cust["id"], "PAYMENT", amount, nlu.items_from(text), raw, shopkeeper_id=sid)
             T.settle_due_promises(conn, cust["id"], amount)
             bal = T.customer_balance(conn, cust["id"])
             reply = _reply(lang, "pay", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
@@ -180,7 +207,7 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
                 return {"reply": _reply(lang, "need_name") or "Kiske naam pe likhna hai? Customer ka naam boliye.",
                         "action": "NEED_NAME", "data": {}}
             cust = T.find_or_create_customer(conn, name, shopkeeper_id=sid)
-            T.add_entry(conn, cust["id"], "UDHAAR", amount, nlu.items_from(text), text, shopkeeper_id=sid)
+            T.add_entry(conn, cust["id"], "UDHAAR", amount, nlu.items_from(text), raw, shopkeeper_id=sid)
             bal = T.customer_balance(conn, cust["id"])
             reply = _reply(lang, "add", name=cust["name"], amt=T.fmt_money(amount), bal=T.fmt_money(bal))
             return {"reply": reply or f"{cust['name']} par {T.fmt_money(amount)} ka udhaar likh diya. "
@@ -190,11 +217,11 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
 
         if intent == "QUERY_BALANCE":
             if not name:
-                return {"reply": _reply(lang, "need_name") or "Kis ka baki dekhna hai? Naam boliye.",
-                        "action": "NEED_NAME", "data": {}}
+                return _totals_reply(conn, lang, sid)   # "kitna baki hai?" -> poori dukaan ka
             cust = T.find_customer(conn, name, sid)
             if not cust:
-                return {"reply": f"{name} khata me nahi hai.", "action": "NOT_FOUND", "data": {}}
+                return {"reply": _reply(lang, "not_found", name=name) or f"{name} khata me nahi hai.",
+                        "action": "NOT_FOUND", "data": {}}
             bal = T.customer_balance(conn, cust["id"])
             reply = _reply(lang, "balance", name=cust["name"], amt=T.fmt_money(bal))
             return {"reply": reply or f"{cust['name']} ka total bakipada {T.fmt_money(bal)} hai.",
@@ -203,28 +230,30 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
         if intent == "SETTLE":
             if not name:
                 return {"reply": "Kiska hisaab clear karna hai? Naam boliye.", "action": "NEED_NAME", "data": {}}
-            cust = T.find_customer(conn, name)
+            cust = T.find_customer(conn, name, sid)
             if not cust:
-                return {"reply": f"{name} khata me nahi hai.", "action": "NOT_FOUND", "data": {}}
+                return {"reply": _reply(lang, "not_found", name=name) or f"{name} khata me nahi hai.",
+                        "action": "NOT_FOUND", "data": {}}
             bal = T.customer_balance(conn, cust["id"])
-            if bal > 0:
-                T.add_entry(conn, cust["id"], "PAYMENT", bal, "", text)
-                T.settle_due_promises(conn, cust["id"], bal)
-            return {"reply": f"{cust['name']} ka hisaab poora clear — {T.fmt_money(bal)} settle.",
+            if bal <= 0:
+                return {"reply": f"{cust['name']} ka hisaab pehle se clear hai — kuch baki nahi.",
+                        "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
+            T.add_entry(conn, cust["id"], "PAYMENT", bal, "hisaab clear", raw, shopkeeper_id=sid)
+            T.settle_due_promises(conn, cust["id"], bal)
+            reply = _reply(lang, "settled", name=cust["name"], amt=T.fmt_money(bal))
+            return {"reply": reply or f"{cust['name']} ka hisaab poora clear — {T.fmt_money(bal)} settle.",
                     "action": "SETTLED", "data": {"customer": cust["name"], "balance": 0.0}}
 
         if intent == "BRIEFING":
             return run_tool("briefing", {}, sid=sid)
         if intent == "TOTALS":
-            if native:
-                tot = T.totals(conn)
-                return {"reply": _reply(lang, "totals", u=T.fmt_money(tot["udhaar_today"]),
-                                        c=T.fmt_money(tot["cash_in_today"]), t=T.fmt_money(tot["udhaar_total"])),
-                        "action": "TOTALS", "data": tot}
-            return run_tool("totals_today", {}, sid=sid)
+            return _totals_reply(conn, lang, sid)
         if intent == "LIST_DUES":
             return run_tool("list_dues", {}, sid=sid)
-        if intent == "SCORE" and name:
+        if intent == "SCORE":
+            if not name:
+                return {"reply": _reply(lang, "need_name") or "Kiska score dekhna hai? Naam boliye.",
+                        "action": "NEED_NAME", "data": {}}
             return run_tool("trust_score", {"customer_name": name}, sid=sid)
 
     return {

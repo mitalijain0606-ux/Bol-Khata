@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
-import { speak, startListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
+import { speak, startListening, stopListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
 
 const LANGS = [
   { code: "hi-IN", label: "Hinglish", ex: "Sharma ji ko do hazaar ka udhaar lagana" },
@@ -23,7 +23,10 @@ export default function Khata({ gnani, onNav }) {
     api.entries(12).then(setEntries).catch(() => {});
     api.totals().then(setTotals).catch(() => {});
   };
-  useEffect(refreshFeed, []);
+  useEffect(() => {
+    refreshFeed();
+    return () => { stopListening(); stopSpeaking(); };   // leaving the tab: release the mic
+  }, []);
 
   useEffect(() => {
     logRef.current?.scrollTo({ top: 1e6, behavior: "smooth" });
@@ -42,7 +45,7 @@ export default function Khata({ gnani, onNav }) {
       speak(res.reply, { lang, pitch: 1, rate: 1.02 });
       if (["ENTRY_ADDED", "SETTLED"].includes(res.action)) refreshFeed();
     } catch (e) {
-      say("Server se baat nahi ho payi — backend chal raha hai?", "agent");
+      if (e.message !== "logged out") say("Server se baat nahi ho payi — backend chal raha hai?", "agent");
     }
     setBusy(false);
   };
@@ -61,6 +64,12 @@ export default function Khata({ gnani, onNav }) {
           else { setHeard(""); say("Awaz clear nahi aayi — dobara boliye.", "agent"); }
         })
         .catch((e) => { setHeard(""); say("STT fail: " + e.message, "agent"); });
+      return;
+    }
+
+    // Mock Mode stop-path: second tap ends listening (whatever was heard is used)
+    if (listening) {
+      stopListening();
       return;
     }
 
@@ -84,10 +93,13 @@ export default function Khata({ gnani, onNav }) {
     setHeard("sun raha hoon...");
     startListening(
       (partial) => setHeard(partial),
-      (final) => {
+      (final, err) => {
         setListening(false);
         if (final) processUtterance(final);
-        else setHeard("");
+        else {
+          setHeard("");
+          say(err ? err.message : "Kuch sunai nahi diya — mic dabake dobara boliye.", "agent");
+        }
       },
       lang
     );
@@ -98,8 +110,8 @@ export default function Khata({ gnani, onNav }) {
       <div className="card mic-card">
         <div className="row">
           <div className="stat">
-            <div className="num red">{totals ? fmt(totals.udhaar_total) : "—"}</div>
-            <div className="lbl">Kul udhaar</div>
+            <div className="num red">{totals ? fmt(totals.outstanding ?? totals.udhaar_total) : "—"}</div>
+            <div className="lbl">Kul baki udhaar</div>
           </div>
           <div className="stat">
             <div className="num green">{totals ? fmt(totals.cash_in_today) : "—"}</div>

@@ -5,9 +5,12 @@ export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
 const j = async (r) => {
-  if (r.status === 401) {
+  // 401 with a saved token = session expired -> back to login.
+  // 401 without one is just a wrong phone/password: fall through so the
+  // login form can show the server's message instead of silently reloading.
+  if (r.status === 401 && getToken() && !r.url.includes("/api/auth/login")) {
     clearToken();
-    window.location.reload(); // session expired -> back to login
+    window.location.reload();
     throw new Error("logged out");
   }
   if (!r.ok) {
@@ -18,7 +21,7 @@ const j = async (r) => {
   return r.status === 204 ? null : r.json();
 };
 
-const authHeaders = () => {
+export const authHeaders = () => {
   const t = getToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };
@@ -52,7 +55,8 @@ export const api = {
   command: (text, lang = "hi-IN") => post("/api/voice/command", { text, lang }),
 
   tts: (text, voice = "", lang = "hi-IN") =>
-    fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`),
+    fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}&lang=${lang}`,
+          { headers: authHeaders() }),
 
   // collections call simulator
   callStart: (cid) => fetch(`/api/call/start/${cid}`, { method: "POST", headers: authHeaders() }).then(j),
@@ -63,6 +67,6 @@ export const api = {
   enroll: (sid, blob) => {
     const fd = new FormData();
     fd.append("file", blob, "enroll.wav");
-    return fetch(`/api/shopkeeper/${sid}/enroll`, { method: "POST", body: fd }).then(j);
+    return fetch(`/api/shopkeeper/${sid}/enroll`, { method: "POST", body: fd, headers: authHeaders() }).then(j);
   },
 };

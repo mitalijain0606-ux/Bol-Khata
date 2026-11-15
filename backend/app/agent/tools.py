@@ -66,7 +66,10 @@ def find_or_create_customer(conn, name: str, shopkeeper_id: int = 1):
 
 def add_entry(conn, customer_id: int, kind: str, amount: float,
               items_text: str = "", raw_transcript: str = "", shopkeeper_id: int = 1):
-    assert kind in ("UDHAAR", "PAYMENT")
+    if kind not in ("UDHAAR", "PAYMENT"):
+        raise ValueError("entry type must be UDHAAR or PAYMENT")
+    if not amount or amount <= 0:
+        raise ValueError("amount must be positive")
     cur = conn.execute(
         """INSERT INTO entry (shopkeeper_id, customer_id, type, amount, items_text, raw_transcript)
            VALUES (?, ?, ?, ?, ?, ?)""",
@@ -120,14 +123,46 @@ def log_promise(conn, customer_id: int, amount: float, due_date: str, call_id: i
     return cur.lastrowid
 
 
-def settle_due_promises(conn, customer_id: int, pay_amount: float):
-    """A payment auto-settles the oldest pending promises it covers."""
-    remaining = pay_amount
-    for p in pending_promises(conn, customer_id):
-        if remaining <= 0:
+def settle_due_promises(conn, customer_id: int, pay_amount: float = 0.0):
+    """Mark pending promises KEPT once the money paid since the promise was made
+    covers them (oldest first). A ₹100 payment no longer 'keeps' a ₹2,000 promise,
+    and two part-payments that add up to the promise do."""
+    pending = conn.execute(
+        "SELECT * FROM promise WHERE customer_id = ? AND status = 'PENDING' ORDER BY id ASC",
+        (customer_id,),
+    ).fetchall()
+    if not pending:
+        return
+    since = min(p["created_at"] or "" for p in pending)
+    paid = float(conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM entry "
+        "WHERE customer_id = ? AND type = 'PAYMENT' AND created_at > ?",
+        (customer_id, since),
+    ).fetchone()["s"])
+    # money already counted towards promises kept in the same window
+    paid -= float(conn.execute(
+        "SELECT COALESCE(SUM(amount), 0) AS s FROM promise "
+        "WHERE customer_id = ? AND status = 'KEPT' AND created_at >= ?",
+        (customer_id, since),
+    ).fetchone()["s"])
+    cleared = customer_balance(conn, customer_id) <= 0
+    for p in pending:
+        if cleared or paid + 0.005 >= float(p["amount"]):
+            conn.execute("UPDATE promise SET status = 'KEPT' WHERE id = ?", (p["id"],))
+            paid -= float(p["amount"])
+        else:
             break
-        remaining -= float(p["amount"])
-        conn.execute("UPDATE promise SET status = 'KEPT' WHERE id = ?", (p["id"],))
+
+
+def expire_promises(conn, shopkeeper_id: int | None = None) -> int:
+    """PENDING -> BROKEN once the due date has passed without the money arriving."""
+    today = date.today().isoformat()
+    sql = ("UPDATE promise SET status = 'BROKEN' WHERE status = 'PENDING' AND due_date < ?")
+    args: tuple = (today,)
+    if shopkeeper_id is not None:
+        sql += " AND customer_id IN (SELECT id FROM customer WHERE shopkeeper_id = ?)"
+        args = (today, shopkeeper_id)
+    return conn.execute(sql, args).rowcount
 
 
 def totals(conn, shopkeeper_id: int = 1):
@@ -141,7 +176,10 @@ def totals(conn, shopkeeper_id: int = 1):
            FROM entry WHERE shopkeeper_id = ?""",
         (today, today, shopkeeper_id),
     ).fetchone()
-    return {k: round(float(row[k]), 2) for k in row.keys()}
+    out = {k: round(float(row[k]), 2) for k in row.keys()}
+    # what is actually still owed (lifetime udhaar minus everything paid back)
+    out["outstanding"] = round(out["udhaar_total"] - out["cash_in_total"], 2)
+    return out
 
 
 def recent_entries(conn, limit: int = 30, shopkeeper_id: int = 1):
@@ -153,39 +191,68 @@ def recent_entries(conn, limit: int = 30, shopkeeper_id: int = 1):
     ).fetchall()
 
 
+_WEEKDAYS = {
+    "somvar": 0, "somwar": 0, "mangalvar": 1, "mangalwar": 1, "budhvar": 2, "budhwar": 2,
+    "guruvar": 3, "guruwar": 3, "bruhaspativar": 3, "shukravar": 4, "shukrawar": 4,
+    "shanivar": 5, "shaniwar": 5, "ravivar": 6, "raviwar": 6, "ravitvar": 6, "itwar": 6,
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4,
+    "saturday": 5, "sunday": 6,
+}
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
+
+
+def _next_day_of_month(day: int, today: date) -> date | None:
+    """Next calendar date whose day-of-month is `day` (today counts)."""
+    y, m = today.year, today.month
+    for _ in range(13):
+        try:
+            d = date(y, m, day)
+            if d >= today:
+                return d
+        except ValueError:
+            pass                       # e.g. the 31st in a 30-day month
+        m += 1
+        if m > 12:
+            y, m = y + 1, 1
+    return None
+
+
 def parse_due_date(text: str) -> str:
     """Hinglish relative dates -> ISO date. 'kal', 'parso', 'aaj', '15 tareekh',
-    'agle somvar' etc."""
+    '19 November', 'agle somvar' etc. Whole-word matching, so 'aajkal' or
+    'bilkul' are not read as a date. Default: tomorrow."""
     t = text.lower()
-    weekdays = {
-        "somvar": 0, "mangalvar": 1, "budhvar": 2, "guruvar": 3, "bruhaspativar": 3,
-        "shukravar": 4, "shanivar": 5, "ravitvar": 6, "sunday": 6, "monday": 0,
-        "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5,
-    }
     today = date.today()
-    if "parso" in t or "parson" in t:
+    words = set(re.findall(r"[a-z]+", t))
+    if words & {"parso", "parson", "parsu"}:
         return (today + timedelta(days=2)).isoformat()
-    if "kal" in t:
+    if "kal" in words:
         return (today + timedelta(days=1)).isoformat()
-    if "aaj" in t:
-        return today.isoformat()
-    if "agle hafte" in t or "next week" in t:
+    if "agle hafte" in t or "next week" in t or "ek hafte" in t:
         return (today + timedelta(days=7)).isoformat()
-    for name, wd in weekdays.items():
-        if name in t:
+    for name, wd in _WEEKDAYS.items():
+        if name in words:
             delta = (wd - today.weekday()) % 7 or 7
             return (today + timedelta(days=delta)).isoformat()
-    # "15 tareekh" / "15 tarikh" / bare "15 ko"
-    for token in t.replace(",", " ").split():
-        tok = token.strip(".,")
-        if tok.isdigit() and 1 <= int(tok) <= 31:
-            try:
-                d = today.replace(day=int(tok))
-                if d < today:
-                    d = d.replace(month=today.month % 12 + 1) if today.month < 12 else today.replace(year=today.year + 1, month=1)
-            except ValueError:
-                continue
-            return d.isoformat()
+    # "19 November" / "15 tareekh" / "15 ko"
+    m = re.search(r"\b(\d{1,2})\s*([a-z]+)", t)
+    if m and 1 <= int(m.group(1)) <= 31:
+        day, word = int(m.group(1)), m.group(2)
+        if word[:3] in _MONTHS and len(word) >= 3 and word not in ("mahine",):
+            for y in (today.year, today.year + 1):
+                try:
+                    d = date(y, _MONTHS[word[:3]], day)
+                except ValueError:
+                    continue
+                if d >= today:
+                    return d.isoformat()
+        elif word in ("tareekh", "tarikh", "tarik", "ko", "tak"):
+            d = _next_day_of_month(day, today)
+            if d:
+                return d.isoformat()
+    if words & {"aaj", "aj", "abhi"}:
+        return today.isoformat()
     return (today + timedelta(days=1)).isoformat()
 
 

@@ -98,6 +98,31 @@ npm install && npm run build                   # backend serves the built PWA
 # Open http://localhost:8000 → login (9876543210 / demo1234)
 ```
 
+On **Windows** the virtualenv scripts live in `.venv\Scripts\` instead of `.venv/bin/`:
+
+```bat
+cd backend
+python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m scripts.seed_fake_data
+.venv\Scripts\uvicorn app.main:app --port 8000
+```
+
+Use **Chrome or Edge** — in the free browser-speech mode the mic relies on the
+browser's speech recognition, which Firefox does not ship. Build the frontend
+before starting the backend (or restart the backend after building).
+
+### Tests
+
+```bash
+cd backend
+.venv/bin/python -m unittest tests.test_smoke -v
+```
+
+The smoke tests run against a throw-away database (they never touch
+`backend/data/`) and cover the NLU in all three languages, account isolation,
+the promise lifecycle, the collections call and the trust score.
+
 ### Configuration
 
 Copy `backend/.env.example` → `backend/.env` and add API keys for cloud speech

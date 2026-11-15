@@ -5,7 +5,24 @@ from app.agent import tools as T
 from app.analytics import trust_score
 
 
+_MONTHS_HI = ["January", "February", "March", "April", "May", "June", "July",
+              "August", "September", "October", "November", "December"]
+
+
+def _when(iso: str) -> str:
+    """ISO date -> something a voice can say: aaj / kal / parso / 18 November."""
+    try:
+        d = date.fromisoformat(iso[:10])
+    except ValueError:
+        return iso
+    delta = (d - date.today()).days
+    if delta in (0, 1, 2):
+        return ("aaj", "kal", "parso")[delta]
+    return f"{d.day} {_MONTHS_HI[d.month - 1]}"
+
+
 def build_briefing(conn, sid: int = 1) -> dict:
+    T.expire_promises(conn, sid)          # overdue wade -> BROKEN before reporting
     tot = T.totals(conn, sid)
     dues = [c for c in T.customers_with_dues(conn, sid) if c["balance"] > 0]
 
@@ -14,20 +31,28 @@ def build_briefing(conn, sid: int = 1) -> dict:
     today = date.today()
     due_soon = conn.execute(
         """SELECT p.*, c.name FROM promise p JOIN customer c ON c.id = p.customer_id
-           WHERE p.status = 'PENDING' ORDER BY p.due_date ASC LIMIT 5"""
+           WHERE p.status = 'PENDING' AND c.shopkeeper_id = ?
+           ORDER BY p.due_date ASC LIMIT 5""", (sid,)
     ).fetchall()
     broken_recent = conn.execute(
         """SELECT p.*, c.name FROM promise p JOIN customer c ON c.id = p.customer_id
-           WHERE p.status = 'BROKEN' ORDER BY p.id DESC LIMIT 3"""
+           WHERE p.status = 'BROKEN' AND c.shopkeeper_id = ?
+           ORDER BY p.due_date DESC, p.id DESC LIMIT 3""", (sid,)
     ).fetchall()
 
-    lines = [f"Namaste! Aaj ke kaam — total udhaar {T.fmt_money(tot['udhaar_total'])} par hai, "
+    if not dues and not tot["udhaar_total"]:
+        text = ("Namaste! Khata abhi khaali hai. Mic dabake boliye — jaise "
+                "'Sharma ji ko paanch sau ka udhaar lagana' — aur pehli entry likh jayegi.")
+        return {"reply": text, "action": "BRIEFING",
+                "data": {"totals": tot, "dues": [], "promises_due": [], "risky": []}}
+
+    lines = [f"Namaste! Aaj ke kaam — kul baki udhaar {T.fmt_money(tot['outstanding'])} par hai, "
              f"aaj cash aaya {T.fmt_money(tot['cash_in_today'])}."]
 
     if due_soon:
         p = due_soon[0]
         lines.append(f"Sabse pehle: {p['name']} — {T.fmt_money(p['amount'])} ka wada "
-                     f"{p['due_date']} ka hai.")
+                     f"{_when(p['due_date'])} ka hai.")
     if broken_recent:
         lines.append(f"Dhyan dijiye: {broken_recent[0]['name']} ne pichhla wada toda tha — "
                      "isse pehle purana clear karwa lein.")
