@@ -338,8 +338,9 @@ function sceneIdea(t) {
   show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
   const talk = clamp(ramp(t, 1.0, 1.6) - ramp(t, 3.0, 3.6));
   let h = blk(t, 0.2, 3.7, `
-    <div class="h2" style="font-size:72px">What if the shopkeeper could just</div>
-    <div class="hero" style="font-size:140px;margin-top:14px;color:#5aa8ff;opacity:${eout(ramp(t, 1.0, 1.8))}">say it?</div>
+    <div class="sub" style="font-size:38px;margin-bottom:22px">A queue at the counter. No time to type.</div>
+    <div class="h2" style="font-size:72px">What if the khata could just</div>
+    <div class="hero" style="font-size:140px;margin-top:14px;color:#5aa8ff;opacity:${eout(ramp(t, 1.0, 1.8))}">listen?</div>
     <div style="margin-top:50px">${wave(t, 48, 760, 120, .15 + .85 * talk)}</div>`);
   const P = [["🎙️", "Bolo", "Speak an entry"], ["🛡️", "Bharosa", "Know before you lend"], ["📞", "Vasooli", "Let the agent collect"]];
   h += blk(t, 3.8, 7.4, `<div style="display:flex;gap:40px">${P.map(([ic, a, b], i) => {

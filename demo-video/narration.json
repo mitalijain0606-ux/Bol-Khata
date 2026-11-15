@@ -40,85 +40,81 @@
   ],
   "narration": [
     [
-      0.6,
+      0.4,
       6.2,
-      "India has thirteen million kirana stores."
+      "Every evening, in thirteen million kirana stores across India, the same old notebook comes out."
     ],
     [
       6.6,
-      12.2,
-      "Only about one in ten keeps its books digitally. The rest run on a notebook."
+      12.4,
+      "Barely one shop in ten keeps its accounts digitally. The other nine still trust paper."
     ],
     [
       12.6,
-      17.8,
-      "And one in three customers buys on udhaar — credit, on trust."
+      18.2,
+      "And one in three customers buys on udhaar — take it today, pay later, on trust."
     ],
     [
-      18.2,
-      23.6,
-      "Every rupee of it is written by hand, and chased in person."
+      18.4,
+      23.8,
+      "Smudged names. Forgotten dues. Awkward reminders. Money already earned — that may never come home."
     ],
     [
       24.2,
       33.6,
-      "So I asked: what if the shopkeeper could just say it? Bol-Khata — speak an entry, know before you lend, and let the agent collect.",
-      "So I asked: what if the shopkeeper could just say it? Bol Khata. Speak an entry, know before you lend, and let the agent collect."
+      "A shopkeeper with a queue at the counter has no time to type. He needs a khata that listens. So I built Bol-Khata.",
+      "A shopkeeper with a queue at the counter has no time to type. He needs a khata that listens. So I built Bol Khata."
     ],
     [
       34.4,
       40.0,
-      "Ramesh ne paanch sau rupaye udhaar liye. Written to Ramesh Mishra's khata, balance read back.",
-      "Ramesh ne paanch sau rupaye udhaar liye. Written to Ramesh Mishra's khata, and the balance is read back."
+      "Ramesh ne paanch sau rupaye udhaar liye. Done. Written to Ramesh's khata, balance read back."
     ],
     [
       40.4,
-      45.2,
-      "Every customer has a full khata, with a one-tap WhatsApp reminder."
+      45.4,
+      "Every customer has a complete khata — every entry, every promise, kept or broken."
     ],
     [
       45.6,
       51.0,
-      "Payments bring the balance down instantly."
+      "When money comes back, just say so. The balance updates instantly. No pen, no maths."
     ],
     [
       51.4,
       56.6,
-      "And a new name simply opens a new khata — no forms."
+      "A new customer? Just say their name, and their khata opens on its own."
     ],
     [
       57.4,
       67.8,
-      "Or just speak. Gnani Prisma turns speech into text, the agent updates the khata, and Gnani Timbre speaks the answer back.",
-      "Or just speak. Gnani Prisma turns speech into text, the agent updates the khata, and Gnani Timbre speaks the answer back."
+      "This is the heart of it. The shopkeeper speaks naturally, in Hinglish. Gnani Prisma understands, the khata updates itself, and Gnani Timbre answers back, out loud."
     ],
     [
       68.2,
       75.0,
-      "Before lending, ask. Chauhan ji has broken two promises — so Bol-Khata says no.",
-      "Before lending, ask. Chauhan ji has broken two promises, so Bol Khata says no."
+      "Before giving credit, he can simply ask. Chauhan ji has already broken two promises — so, not today."
     ],
     [
       75.6,
       80.6,
-      "Sharma ji always pays on time. Yes."
+      "Sharma ji has always paid on time. Go ahead — he's good for it."
     ],
     [
       81.4,
       96.6,
-      "When money is overdue, the agent makes the collections call itself — politely agreeing a date and logging the promise. Here, with a simulated customer."
+      "Every customer earns a trust score from how they actually pay. And when dues pile up, the agent makes the collection call itself — polite, patient, and it comes back with a date. In this demo, the customer is simulated."
     ],
     [
       97.4,
       106.4,
-      "Gnani Prisma and Timbre for speech, GPT-OSS on Groq for reasoning, and a rule engine guarding every rupee.",
-      "Gnani Prisma and Timbre for speech, G P T O S S on Groq for reasoning, and a rule engine guarding every rupee."
+      "Under the hood: Gnani Prisma listens, Gnani Timbre speaks, a reasoning model on Groq thinks — and a rule engine guards every rupee."
     ],
     [
       107.6,
-      119.0,
-      "Thirteen million counters. Each one can now just speak — no typing, no forgotten udhaar. Bol-Khata: your dukaan, your voice, your digital khata.",
-      "Thirteen million counters. Each one can now just speak. No typing, no forgotten udhaar. Bol Khata. Your dukaan, your voice, your digital khata."
+      119.4,
+      "Thirteen million shopkeepers. No typing. No English menus. No forgotten udhaar. Just their own voice. Bol-Khata — your dukaan, your voice, your digital khata.",
+      "Thirteen million shopkeepers. No typing. No English menus. No forgotten udhaar. Just their own voice. Bol Khata. Your dukaan, your voice, your digital khata."
     ]
   ]
 }

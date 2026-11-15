@@ -80,12 +80,16 @@ def main():
         norm = outdir / f"{i:02d}.wav"
         subprocess.run([ff, "-y", "-loglevel", "error", "-i", str(raw), "-ar", "48000", "-ac", "2", str(norm)], check=True)
         dur, slot = wav_seconds(norm), end - start
+        tempo = 1.0
         if dur > slot:                                   # speed up a little to fit its scene
             tempo = min(dur / slot, 1.25)
+        elif dur < slot * 0.85:                          # or slow down a touch to fill it
+            tempo = max(dur / (slot * 0.95), 0.9)
+        if tempo != 1.0:
             fitted = outdir / f"{i:02d}.fit.wav"
             subprocess.run([ff, "-y", "-loglevel", "error", "-i", str(norm), "-filter:a", f"atempo={tempo:.3f}",
                             str(fitted)], check=True)
-            print(f"  line {i + 1}: {dur:.1f}s in a {slot:.1f}s slot -> sped up x{tempo:.2f}"
+            print(f"  line {i + 1}: {dur:.1f}s in a {slot:.1f}s slot -> tempo x{tempo:.2f}"
                   + ("" if dur / tempo <= slot + 0.3 else "  (still a little long; it runs into the pause after it)"))
             norm = fitted
         clips.append((start, norm))
