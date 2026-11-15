@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import { speak, stopSpeaking, startListening, speechSupported } from "../voice.js";
-import { fmt } from "./Khata.jsx";
+import { fmt, fmtDate, whatsappLink } from "../util.js";
 
 const PERSONA_META = {
   promiser: { emoji: "🙂", label: "Pakka-wala" },
@@ -9,7 +9,7 @@ const PERSONA_META = {
   bargainer: { emoji: "🤝", label: "Bhav-taai-wala" },
 };
 
-export default function CallScreen({ gnani }) {
+export default function CallScreen({ me, onNav }) {
   const [customers, setCustomers] = useState([]);
   const [call, setCall] = useState(null);      // {call_id, customer, balance, broken_count}
   const [bubbles, setBubbles] = useState([]);  // {who:'agent'|'customer', text}
@@ -257,15 +257,23 @@ export default function CallScreen({ gnani }) {
         <div className="big">{result.summary}</div>
         {result.promise && (
           <div style={{ color: "var(--muted)", fontSize: 13 }}>
-            Wada khata me record ho gaya — due {result.promise.due_date}. Follow-up khud ho jayega.
+            Wada khata me record ho gaya — {fmt(result.promise.amount)}, {fmtDate(result.promise.due_date)} tak.
+            Date nikalne par ye apne aap "toda" mark hoga aur score girega.
           </div>
+        )}
+        {result.promise && call && (
+          <a className="btn wa" style={{ marginTop: 12 }} target="_blank" rel="noreferrer"
+             href={whatsappLink({ name: call.customer.name, shop: me?.shop_name || me?.name,
+                                  balance: result.promise.amount, promise: result.promise })}>
+            💬 Wade ka WhatsApp reminder bhejo
+          </a>
         )}
         <div style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 8 }}>
           Sentiment: {result.sentiment} · Outcome: {result.outcome}
         </div>
         <div className="call-actions">
           <button className="btn ghost" onClick={() => { setPhase("list"); setResult(null); loadCustomers(); }}>← Wapas list</button>
-          <button className="btn green" onClick={() => window.location.reload()}>Khata dekho</button>
+          <button className="btn green" onClick={() => onNav && onNav("khata")}>Khata dekho</button>
         </div>
       </div>
     );

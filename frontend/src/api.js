@@ -47,6 +47,7 @@ export const api = {
   ledger: (cid) => get(`/api/customers/${cid}/ledger`),
 
   entries: (limit = 30) => get(`/api/entries?limit=${limit}`),
+  deleteEntry: (id) => fetch(`/api/entries/${id}`, { method: "DELETE", headers: authHeaders() }).then(j),
   totals: () => get("/api/totals"),
   trustScores: () => get("/api/trust-scores"),
   briefing: () => get("/api/briefing"),

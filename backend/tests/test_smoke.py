@@ -109,6 +109,8 @@ class API(unittest.TestCase):
         self.assertEqual(brief["data"]["promises_due"], [])
         self.say("Sharma ji ko 500 ka udhaar lagana", self.other)
         r = self.say("Sharma ji ka hisaab clear kar do", self.other)
+        self.assertEqual(r["action"], "CONFIRM_SETTLE")      # asks before wiping a balance
+        r = self.say("हाँ", self.other)
         self.assertEqual(r["action"], "SETTLED")
         self.assertIn("₹500", r["reply"])
         self.assertEqual(self.c.get("/api/totals", headers=self.demo).json(), demo_before)
@@ -128,6 +130,33 @@ class API(unittest.TestCase):
         self.assertEqual(self.say("kitna udhaar bana total")["action"], "TOTALS")
         self.assertEqual(self.say("aaj ka hisaab")["action"], "BRIEFING")
         self.assertEqual(self.say("Kapoor ji ne 200 diye")["action"], "NOT_FOUND")   # payment never invents a customer
+
+    def test_settle_needs_confirmation(self):
+        self.say("Confirm ji ko 700 ka udhaar lagana")
+        self.assertEqual(self.say("Confirm ji ka hisaab clear kar do")["action"], "CONFIRM_SETTLE")
+        self.assertEqual(self.say("nahi")["action"], "CANCELLED")
+        self.assertIn("₹700", self.say("Confirm ji ka kitna baki hai")["reply"])
+        self.say("Confirm ji ka hisaab clear kar do")
+        self.assertEqual(self.say("Confirm ji ka kitna baki hai")["action"], "BALANCE")   # other command drops it
+        self.assertEqual(self.say("haan")["action"], "UNKNOWN")
+
+    def test_undo_and_delete(self):
+        self.say("Bansal ji ko 400 ka udhaar lagana")
+        self.say("Bansal ji ko 999 ka udhaar lagana")
+        r = self.say("galat entry hatao")
+        self.assertEqual((r["action"], r["data"]["amount"], r["data"]["balance"]), ("ENTRY_DELETED", 999, 400))
+        eid = self.c.get("/api/entries?limit=1", headers=self.demo).json()[0]["id"]
+        self.assertEqual(self.c.delete(f"/api/entries/{eid}", headers=self.other).status_code, 404)
+        self.assertEqual(self.c.delete(f"/api/entries/{eid}", headers=self.demo).json()["balance"], 0)
+
+    def test_lend_advice(self):
+        r = self.say("Sharma ji ko 2000 udhaar du kya")
+        self.assertEqual((r["action"], r["data"]["decision"], r["data"]["amount"]), ("LEND_ADVICE", "yes", 2000))
+        self.assertEqual(self.say("चौहान जी को 500 उधार दूं क्या")["data"]["decision"], "no")
+        self.assertEqual(self.say("Naya Banda ko udhaar dena chahiye")["data"]["decision"], "careful")
+        before = self.c.get("/api/totals", headers=self.demo).json()
+        self.assertEqual(self.c.get("/api/totals", headers=self.demo).json(), before)   # advice writes nothing
+        self.assertEqual(self.say("Sharma ji ko 100 ka udhaar de do")["action"], "ENTRY_ADDED")  # "de do" is not a question
 
     def test_promise_lifecycle(self):
         self.say("Lifecycle ji ko 2000 ka udhaar lagana")

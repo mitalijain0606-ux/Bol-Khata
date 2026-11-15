@@ -47,8 +47,9 @@ export default function Settings({ me, onSaved, onLogout }) {
       <div className="card">
         <h3>Awaaz ka lock</h3>
         <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 10 }}>
-          Apni awaaz enroll karo — uske baad entries delete/settle sirf aapki awaaz
-          bolke hongi. Customer ki awaaz se kuch nahi badlega.
+          Apni awaaz enroll karo taaki app malik ki awaaz pehchaan sake. Abhi hisaab
+          clear karne se pehle app "haan/nahi" poochta hai; awaaz-match ko har command
+          par lagana agla kadam hai.
         </div>
         <button className="btn" onClick={enroll} disabled={busy}>
           {busy ? "record ho raha hai…" : "🎙️ Meri awaaz enroll karo (5 sec)"}

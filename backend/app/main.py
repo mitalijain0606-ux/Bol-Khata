@@ -242,6 +242,18 @@ def entries(request: Request, limit: int = 30):
         return [dict(e) for e in T.recent_entries(conn, max(1, min(limit, 200)), _sid(request))]
 
 
+@app.delete("/api/entries/{eid}")
+def delete_entry(eid: int, request: Request):
+    """Remove a wrong entry (a misheard amount or name)."""
+    sid = _sid(request)
+    with db() as conn:
+        row = conn.execute("SELECT * FROM entry WHERE id = ? AND shopkeeper_id = ?", (eid, sid)).fetchone()
+        if not row:
+            raise HTTPException(404, "entry not found")
+        conn.execute("DELETE FROM entry WHERE id = ?", (eid,))
+        return {"ok": True, "balance": T.customer_balance(conn, row["customer_id"])}
+
+
 @app.post("/api/entries")
 def add_entry(e: EntryIn, request: Request):
     sid = _sid(request)

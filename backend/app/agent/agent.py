@@ -5,6 +5,8 @@ Both paths produce the same shape:
 """
 import json
 import logging
+import re
+import time
 
 from app.agent import nlu, tools as T
 from app.analytics import trust_score
@@ -167,9 +169,87 @@ def _totals_reply(conn, lang: str, sid: int) -> dict:
     return {"reply": reply, "action": "TOTALS", "data": tot}
 
 
+# A settle wipes a whole balance, so it is a two-step: the agent asks, the owner
+# says "haan". Pending confirmations live here per shopkeeper for 60 seconds.
+_PENDING_SETTLE: dict[int, tuple[int, float]] = {}
+_YES = re.compile(r"^(ji )?(han|ha|haa|yes|ok|okay|pakka|bilkul|thik hai|kar do|kardo|kar de|ho|hoy|ama|am|sari)\b")
+_NO = re.compile(r"^(ji )?(nahi|nahin|na|no|mat|cancel|rehne do|ruk|nako|venda|vendam)\b")
+
+
+def _do_settle(conn, cust, raw: str, lang: str, sid: int) -> dict:
+    bal = T.customer_balance(conn, cust["id"])
+    if bal <= 0:
+        return {"reply": f"{cust['name']} ka hisaab pehle se clear hai — kuch baki nahi.",
+                "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
+    T.add_entry(conn, cust["id"], "PAYMENT", bal, "hisaab clear", raw, shopkeeper_id=sid)
+    T.settle_due_promises(conn, cust["id"], bal)
+    reply = _reply(lang, "settled", name=cust["name"], amt=T.fmt_money(bal))
+    return {"reply": reply or f"{cust['name']} ka hisaab poora clear — {T.fmt_money(bal)} settle.",
+            "action": "SETTLED", "data": {"customer": cust["name"], "balance": 0.0}}
+
+
+def _lend_advice(conn, name: str, amount: float | None, sid: int) -> dict:
+    """'Sharma ji ko 2000 udhaar du?' -> a yes / careful / no backed by the score."""
+    cust = T.find_customer(conn, name, sid)
+    ask = f"{T.fmt_money(amount)} " if amount else ""
+    if not cust:
+        return {"reply": f"{name} naya customer hai — khata me koi history nahi. "
+                         "Chhote udhaar se shuru kijiye, phir score banega.",
+                "action": "LEND_ADVICE", "data": {"decision": "careful", "customer": name}}
+    T.expire_promises(conn, sid)
+    res = trust_score.compute(conn, cust["id"])
+    bal, score, b = res["balance"], res["score"], res["breakdown"]
+    facts = f"Score {score}/100, abhi {T.fmt_money(bal)} baki hai"
+    if b["promises_broken"]:
+        facts += f", {b['promises_broken']} wada toda hai"
+    elif b["promises_kept"]:
+        facts += f", {b['promises_kept']} wade poore kiye hain"
+    after = f" Dene ke baad total {T.fmt_money(bal + amount)} ho jayega." if amount else ""
+    if score >= 80:
+        decision, line = "yes", f"Haan, {cust['name']} ko {ask}udhaar de sakte hain."
+    elif score >= 55:
+        decision, line = "careful", (f"{cust['name']} ko {ask}udhaar sambhal ke dijiye — "
+                                     "chhota udhaar theek hai, bada nahi.")
+    else:
+        decision, line = "no", (f"Nahi — {cust['name']} ko abhi {ask}udhaar mat dijiye. "
+                                "Pehle purana baki clear karwaiye.")
+    return {"reply": f"{line} {facts}.{after}", "action": "LEND_ADVICE",
+            "data": {"decision": decision, "customer": cust["name"], "customer_id": cust["id"],
+                     "score": score, "balance": bal, "amount": amount}}
+
+
+def _undo_last(conn, sid: int) -> dict:
+    last = conn.execute(
+        """SELECT e.*, c.name AS customer_name FROM entry e JOIN customer c ON c.id = e.customer_id
+           WHERE e.shopkeeper_id = ? ORDER BY e.id DESC LIMIT 1""", (sid,)).fetchone()
+    if not last:
+        return {"reply": "Khata me hatane ke liye koi entry nahi hai.", "action": "UNKNOWN", "data": {}}
+    conn.execute("DELETE FROM entry WHERE id = ?", (last["id"],))
+    kind = "udhaar" if last["type"] == "UDHAAR" else "payment"
+    bal = T.customer_balance(conn, last["customer_id"])
+    return {"reply": f"Hata diya — {last['customer_name']} ki {T.fmt_money(last['amount'])} ki {kind} entry. "
+                     f"Ab bakipada {T.fmt_money(bal)}.",
+            "action": "ENTRY_DELETED",
+            "data": {"customer": last["customer_name"], "amount": last["amount"], "balance": bal}}
+
+
 def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
     raw = text                      # audit trail keeps exactly what was spoken
     text = nlu.transliterate(text)  # STT transcripts arrive in native scripts
+
+    pending = _PENDING_SETTLE.pop(sid, None)
+    if pending and time.time() - pending[1] < 60:
+        said = nlu.canon(text).strip(" .,!?")
+        if _YES.search(said):
+            with db() as conn:
+                cust = conn.execute("SELECT * FROM customer WHERE id = ? AND shopkeeper_id = ?",
+                                    (pending[0], sid)).fetchone()
+                if cust:
+                    return _do_settle(conn, cust, raw, lang, sid)
+        elif _NO.search(said):
+            return {"reply": "Theek hai, kuch nahi badla.", "action": "CANCELLED", "data": {}}
+        # anything else: forget the pending settle and treat it as a new command
+
     intent = nlu.classify(text, lang)
     amount = nlu.parse_amount(text, lang)
     native = lang in REPLIES  # Marathi/Tamil reply in native script for the voice
@@ -238,11 +318,18 @@ def rule_reply(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
             if bal <= 0:
                 return {"reply": f"{cust['name']} ka hisaab pehle se clear hai — kuch baki nahi.",
                         "action": "BALANCE", "data": {"customer": cust["name"], "balance": bal}}
-            T.add_entry(conn, cust["id"], "PAYMENT", bal, "hisaab clear", raw, shopkeeper_id=sid)
-            T.settle_due_promises(conn, cust["id"], bal)
-            reply = _reply(lang, "settled", name=cust["name"], amt=T.fmt_money(bal))
-            return {"reply": reply or f"{cust['name']} ka hisaab poora clear — {T.fmt_money(bal)} settle.",
-                    "action": "SETTLED", "data": {"customer": cust["name"], "balance": 0.0}}
+            _PENDING_SETTLE[sid] = (cust["id"], time.time())
+            return {"reply": f"{cust['name']} ka {T.fmt_money(bal)} baki hai. Poora clear kar doon? "
+                             "'Haan' ya 'nahi' boliye.",
+                    "action": "CONFIRM_SETTLE",
+                    "data": {"customer": cust["name"], "customer_id": cust["id"], "balance": bal}}
+
+        if intent == "UNDO":
+            return _undo_last(conn, sid)
+        if intent == "LEND":
+            if not name:
+                return {"reply": "Kisko udhaar dena hai? Naam boliye.", "action": "NEED_NAME", "data": {}}
+            return _lend_advice(conn, name, amount, sid)
 
         if intent == "BRIEFING":
             return run_tool("briefing", {}, sid=sid)

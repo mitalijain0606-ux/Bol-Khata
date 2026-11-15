@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { speak, stopSpeaking } from "../voice.js";
-import { fmt } from "./Khata.jsx";
+import { fmt } from "../util.js";
+import CustomerDetail from "./CustomerDetail.jsx";
 
 const RING_COLORS = { Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--orange)", Risky: "var(--red)" };
 
-export default function Dashboard({ onNav }) {
+export default function Dashboard({ onNav, me }) {
+  const [openCid, setOpenCid] = useState(null);
+  const reload = () => {
+    api.briefing().then(setBrief).catch(() => {});
+    api.trustScores().then(setScores).catch(() => setScores([]));
+    api.totals().then(setTotals).catch(() => {});
+  };
   const [brief, setBrief] = useState(null);
   const [scores, setScores] = useState(null); // null = loading
   const [totals, setTotals] = useState(null);
@@ -72,11 +79,18 @@ export default function Dashboard({ onNav }) {
                 {s.breakdown.adjustments.length > 0 && (
                   <div>🧮 {s.breakdown.adjustments.join(" · ")}</div>
                 )}
+                <button className="linkbtn" onClick={() => setOpenCid(s.customer_id)}>
+                  Poora khata dekho →
+                </button>
               </div>
             )}
           </div>
         ))}
       </div>
+
+      {openCid && (
+        <CustomerDetail cid={openCid} me={me} onClose={() => setOpenCid(null)} onChanged={reload} />
+      )}
 
       <div className="card" style={{ fontSize: 12.5, color: "var(--muted)" }}>
         Trust Score ek explainable formula hai: wada toda −25 · der se payment −10 ·

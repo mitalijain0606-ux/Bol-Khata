@@ -98,6 +98,7 @@ def compute(conn, customer_id: int) -> dict:
         one += f" ({', '.join(parts)})"
 
     return {
+        "customer_id": customer_id,
         "customer": cust["name"] if cust else str(customer_id),
         "score": score,
         "band": band,

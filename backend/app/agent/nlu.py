@@ -360,6 +360,12 @@ _NOT_NAMES = {
 
 
 INTENT_PATTERNS = [
+    # "galat entry hatao" / "pichhli entry delete karo" / "undo"
+    ("UNDO", [r"\b(undo|galat (entry|entri)|(pichhli|pichli|aakhri|last) (entry|entri)|"
+              r"(entry|entri) (hata|delete|dilit|cancel|mita|radd|wapas))"]),
+    # "Sharma ji ko 2000 udhaar du?" — advice, not an entry
+    ("LEND", [r"\b((udhaar|udhar) (aur )?(de )?(du|dun|doon)|de (du|dun|doon)|(du|dun|doon) kya|de sakt|"
+              r"dena (chahiye|chahie|theek|sahi)|udhaar dena safe|bharosa kar)\b"]),
     ("PAYMENT", [r"\b(diya|diye|die|diy|de diya|jama|chukaya|chukaye|chuka diya|lautaya|lautaye|wapas (kiya|kiye|kar)|"
                  r"payment (aa|aaya|aayi|received|mila|mili)|paisa (de|diya)|(paise|rupaye|rupe) (aaye|aa gaye|mile|mil gaye))\b"]),
     ("QUERY_BALANCE", [r"\b(kitna (baki|baaki|udhaar|udhar)|baki kitna|kitna dena|balance (kya|kitna)|ka kitna)\b"]),
