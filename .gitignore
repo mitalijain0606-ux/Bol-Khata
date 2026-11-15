@@ -16,3 +16,7 @@ frontend/dist/
 # local planning/notes (not part of the public project)
 PLAN.md
 docs/
+
+# demo video outputs (large; upload them, don't commit them)
+demo-video/*.mp4
+demo-video/narration/

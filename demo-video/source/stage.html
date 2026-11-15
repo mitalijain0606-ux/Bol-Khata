@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  @font-face { font-family: "Kalam"; src: url(fonts/kalam-latin-400-normal.woff2); font-weight: 400; unicode-range: U+0000-00FF,U+20B9,U+2014; }
+  @font-face { font-family: "Kalam"; src: url(fonts/kalam-latin-700-normal.woff2); font-weight: 700; unicode-range: U+0000-00FF,U+20B9,U+2014; }
+  @font-face { font-family: "Kalam"; src: url(fonts/kalam-devanagari-400-normal.woff2); font-weight: 400; unicode-range: U+0900-097F,U+200C-200D; }
+  @font-face { font-family: "Kalam"; src: url(fonts/kalam-devanagari-700-normal.woff2); font-weight: 700; unicode-range: U+0900-097F,U+200C-200D; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .blue { color: #5aa8ff; }
+  .red { color: #ff7a66; }
+  .kick { font-size: 20px; font-weight: 700; letter-spacing: .26em; color: #5aa8ff; }
+  .hero { font-size: 150px; font-weight: 800; letter-spacing: -.035em; color: #fff; font-variant-numeric: tabular-nums; line-height: 1; }
+  .h2 { font-size: 64px; font-weight: 750; letter-spacing: -.025em; color: #fff; line-height: 1.12; }
+  .sub { font-size: 34px; font-weight: 450; color: #a9bfdc; line-height: 1.4; }
+  .src { position: absolute; left: 0; right: 0; bottom: 60px; text-align: center; font-size: 17px; color: #5f7898; }
+  .card { padding: 34px 38px; border-radius: 26px; background: rgba(255,255,255,.055); border: 1.5px solid rgba(140,185,245,.22);
+    width: 380px; text-align: left; }
+  .card .ic { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; font-size: 32px;
+    background: linear-gradient(140deg, #4a97f5, #2f6fd6); box-shadow: 0 14px 34px rgba(47,125,225,.4); }
+  .card .w { font-size: 46px; font-weight: 800; color: #fff; margin-top: 26px; letter-spacing: -.02em; }
+  .card .d { font-size: 25px; color: #a9bfdc; margin-top: 6px; }
+  .pill { padding: 14px 26px; border-radius: 999px; border: 1.5px solid rgba(140,185,245,.35); color: #dbe7f7; font-size: 28px; font-weight: 600; }
+  .khatapage { width: 760px; padding: 40px 54px 46px 120px; background: #fbfaf4; border-radius: 10px; position: relative; color: #1f2b46;
+    box-shadow: 0 40px 100px rgba(0,0,0,.5); font-family: "Kalam", cursive;
+    background-image: linear-gradient(to right, transparent 92px, rgba(230,90,80,.55) 92px 94px, transparent 94px),
+      repeating-linear-gradient(to bottom, transparent 0 55px, rgba(80,130,210,.32) 55px 57px); background-position: 0 0, 0 22px; }
+  .khatapage .row { display: flex; justify-content: space-between; font-size: 36px; line-height: 57px; }
+  .khatapage .cover { position: absolute; left: -26px; top: -14px; bottom: -14px; width: 40px; border-radius: 8px 0 0 8px;
+    background: linear-gradient(90deg, #8f1d1d, #b42a24); box-shadow: inset -4px 0 8px rgba(0,0,0,.3); }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #0b1626; }
+  body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; }
+  #stage { position: absolute; inset: 0; overflow: hidden; }
+  .layer { position: absolute; inset: 0; }
+
+  #bgLight { background: radial-gradient(1400px 900px at 78% 40%, #ffffff 0%, #eef5fe 45%, #dfeafa 100%); }
+  #bgDark  { background: radial-gradient(1100px 760px at 50% 42%, #173564 0%, #0d1d38 48%, #08111f 100%); }
+  #ruled { opacity: 0;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 63px, rgba(120,160,220,.08) 63px 64px);
+    -webkit-mask-image: radial-gradient(900px 600px at 50% 50%, #000 30%, transparent 75%); }
+  #ruled::before { content: ""; position: absolute; top: 0; bottom: 0; left: 360px; width: 2px; background: rgba(239,107,90,.18); }
+
+  /* ---- phone ---- */
+  #world { transform-origin: 0 0; }
+  #phone { position: absolute; left: 1093px; top: 84px; width: 430px; height: 912px; border-radius: 58px;
+    background: #0d1420; padding: 12px; box-shadow: 0 50px 120px rgba(20,50,100,.30), 0 12px 30px rgba(20,50,100,.18),
+    inset 0 0 0 2px #2a3446; }
+  #phone .screen { position: relative; width: 406px; height: 888px; border-radius: 46px; overflow: hidden; background: #eaf2fd; }
+  #phone img { position: absolute; left: 0; top: 0; width: 406px; height: 880px; margin-top: 4px; }
+  #phone .notch { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); width: 110px; height: 30px;
+    background: #0d1420; border-radius: 0 0 18px 18px; z-index: 3; }
+  #phone .glare { position: absolute; inset: 0; border-radius: 46px; pointer-events: none; z-index: 4;
+    background: linear-gradient(115deg, rgba(255,255,255,.10) 0%, rgba(255,255,255,0) 30%); }
+
+  /* ---- side copy ---- */
+  #side { position: absolute; left: 150px; top: 0; width: 760px; height: 1080px; display: flex; flex-direction: column; justify-content: center; }
+  .kicker { font-size: 19px; font-weight: 700; letter-spacing: .22em; color: #2f7de1; margin-bottom: 22px; }
+  #side h1 { font-size: 58px; line-height: 1.12; font-weight: 750; color: #0f2340; letter-spacing: -.02em; }
+  #side p { margin-top: 26px; font-size: 27px; line-height: 1.5; color: #48607e; font-weight: 450; max-width: 700px; }
+  #side .note { margin-top: 30px; font-size: 17px; color: #7d90a8; font-weight: 500; max-width: 640px; line-height: 1.5; }
+  .copyblock { position: absolute; left: 0; right: 0; }
+
+  /* ---- pipeline chips (hero) ---- */
+  #chips { position: absolute; left: 150px; top: 760px; display: flex; gap: 14px; align-items: center; }
+  .chip { padding: 14px 18px; border-radius: 16px; background: #fff; border: 1.5px solid #d6e3f5; color: #6d82a0;
+    font-size: 17px; font-weight: 600; line-height: 1.25; box-shadow: 0 6px 18px rgba(30,70,140,.06); }
+  .chip b { display: block; font-size: 13px; letter-spacing: .12em; font-weight: 700; color: #9fb1c8; margin-bottom: 3px; }
+  .chip.on { border-color: #2f7de1; color: #0f2340; box-shadow: 0 10px 28px rgba(47,125,225,.22); }
+  .chip.on b { color: #2f7de1; }
+  .arrow { color: #b7c7dc; font-size: 22px; }
+
+  /* ---- full-screen text ---- */
+  #full { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #fff; }
+  .big { font-size: 66px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+  .mid { font-size: 38px; font-weight: 500; color: #a9bfdc; line-height: 1.4; }
+  .logo { width: 132px; height: 132px; border-radius: 38px; display: grid; place-items: center;
+    background: linear-gradient(140deg, #4a97f5, #2f6fd6); box-shadow: 0 24px 60px rgba(47,125,225,.45); }
+
+  /* ---- architecture ---- */
+  #arch { color: #fff; }
+  .box { position: absolute; padding: 22px 26px; border-radius: 22px; background: rgba(255,255,255,.06);
+    border: 1.5px solid rgba(255,255,255,.14); width: 330px; }
+  .box .t { font-size: 15px; letter-spacing: .14em; font-weight: 700; color: #8ea6c6; margin-bottom: 8px; }
+  .box .n { font-size: 27px; font-weight: 700; line-height: 1.2; }
+  .box .s { font-size: 18px; color: #a9bfdc; margin-top: 6px; line-height: 1.35; }
+  .box.gnani { border-color: rgba(92,170,250,.75); background: rgba(47,125,225,.16); }
+  .box.gnani .t { color: #7dbbff; }
+  .box.ext { border-style: dashed; border-color: rgba(255,255,255,.35); }
+  .legend { position: absolute; left: 150px; bottom: 150px; font-size: 19px; color: #a9bfdc; display: flex; gap: 34px; }
+  .sw { display: inline-block; width: 18px; height: 18px; border-radius: 5px; vertical-align: -3px; margin-right: 10px; }
+
+  /* ---- caption ---- */
+  #cap { position: absolute; left: 0; right: 0; bottom: 46px; display: flex; justify-content: center; pointer-events: none; }
+  #cap span { max-width: 1320px; padding: 13px 26px; border-radius: 16px; background: rgba(8,18,32,.78); color: #fff;
+    font-size: 29px; line-height: 1.38; font-weight: 500; text-align: center; }
+
+  #veil { background: #08111f; }
+</style></head>
+<body>
+<div id="stage">
+  <div id="bgDark" class="layer"></div>
+  <div id="bgLight" class="layer"></div>
+  <div id="ruled" class="layer"></div>
+  <div id="world" class="layer">
+    <div id="phone"><div class="screen"><img id="imA"><img id="imB"><div class="glare"></div></div></div>
+  </div>
+  <div id="side"><div class="copyblock" id="copyA"></div><div class="copyblock" id="copyB"></div></div>
+  <div id="chips">
+    <div class="chip" id="c1"><b>GNANI PRISMA</b>speech → text</div><div class="arrow">→</div>
+    <div class="chip" id="c2"><b>AGENT</b>understands</div><div class="arrow">→</div>
+    <div class="chip" id="c3"><b>KHATA</b>ledger updated</div><div class="arrow">→</div>
+    <div class="chip" id="c4"><b>GNANI TIMBRE</b>speaks back</div>
+  </div>
+  <div id="full" class="layer"></div>
+  <div id="arch" class="layer"></div>
+  <div id="cap"><span></span></div>
+  <div id="veil" class="layer"></div>
+</div>
+<script>
+const SHOTS = window.SHOTS;          // name -> [files], injected by render.py
+const SCENES = window.SCENES;        // [[name, start, end]]
+const NARR = window.NARR;            // [[start, end, text]]
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const ease = (x) => { x = clamp(x); return x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2; };
+const eout = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const ramp = (t, a, b) => clamp((t - a) / (b - a));
+const LOGO = `<svg viewBox="0 0 24 24" fill="none" width="82" height="82"><rect x="9" y="2.5" width="6" height="11" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0" stroke="#fff" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17.5" x2="12" y2="20.5" stroke="#fff" stroke-width="2" stroke-linecap="round"/><line x1="8.8" y1="20.8" x2="15.2" y2="20.8" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>`;
+
+// ---------- preload ----------
+const IMG = {};
+window.preload = async () => {
+  const all = [...new Set(Object.values(SHOTS).flat())];
+  await Promise.all(all.map((f) => new Promise((res) => {
+    const im = new Image(); im.onload = () => im.decode().then(res, res); im.onerror = res; im.src = "shots/" + f; IMG[f] = im;
+  })));
+  return all.length;
+};
+
+// ---------- phone beats: [t, shot(name or name#i), cam [z, fy], copy-key] ----------
+// frames: ["seq", name, t0, t1] expands to evenly timed frames of a sequence
+function seq(name, t0, t1) {
+  const fs = SHOTS[name], out = [], d = (t1 - t0) / fs.length;
+  fs.forEach((f, i) => out.push({ t: t0 + i * d, f, cut: true }));
+  return out;
+}
+const one = (name, t, cut = false) => ({ t, f: SHOTS[name][SHOTS[name].length - 1], cut });
+
+const COPY = {
+  meet: { k: "MEET BOL-KHATA", h: "A digital khata<br>you can talk to.", p: "Hinglish · हिंदी · मराठी · தமிழ் — on any phone, right in the browser." },
+  say: { k: "THE KHATA", h: "Say it — or type it.", p: "One sentence becomes a ledger entry." },
+  credit: { k: "CREDIT ENTRY", h: "“Ramesh ne 500 rupaye udhaar liye”", p: "₹500 credit on Ramesh Mishra — and his new balance, read back." },
+  sheet: { k: "CUSTOMER KHATA", h: "Every customer's<br>full khata", p: "Entries, promises kept or broken, and a one-tap WhatsApp reminder." },
+  pay: { k: "PAYMENT", h: "“Ramesh ji ne 300 rupaye wapas kar diye”", p: "Balance down to ₹5,750, instantly." },
+  newc: { k: "NEW CUSTOMER", h: "No forms.<br>Just say the name.", p: "“Kavita ji ko 250 ka udhaar likh do” opens Kavita's khata." },
+  voice: { k: "VOICE", h: "Tap the mic.<br>Speak naturally.", p: "“Suresh Gupta ne do hazaar paanch sau rupaye diye”",
+           n: "In this screen recording the microphone input is injected (headless browser). On a phone, the shopkeeper's speech goes to Gnani Prisma." },
+  voice2: { k: "VOICE", h: "Understood.<br>Written. Spoken back.", p: "₹2,500 payment from Suresh Gupta. Balance now ₹1,490." },
+  lend: { k: "SHOULD I GIVE CREDIT?", h: "Ask before you lend.", p: "Bol-Khata checks the trust score, the balance and every broken promise." },
+  lendNo: { k: "SHOULD I GIVE CREDIT?", h: "Chauhan ji?<br>⛔ Mat dijiye.", p: "Score 0/100 · ₹7,530 already due · 2 promises broken." },
+  lendYes: { k: "SHOULD I GIVE CREDIT?", h: "Sharma ji?<br>✅ De sakte hain.", p: "Score 100/100 · both promises kept on time." },
+  brief: { k: "EVERY MORNING", h: "A spoken briefing", p: "Who owes the most, whose promise is due, who to be careful with." },
+  score: { k: "BHAROSA SCORE", h: "A trust score for<br>every customer", p: "Built from how they actually pay — on time, late, promises kept or broken." },
+  call: { k: "VASOOLI CALL", h: "The collections call,<br>made by the agent", p: "It asks politely, handles excuses and gets a date.", n: "The customer on this call is simulated for the demo." },
+  callDone: { k: "VASOOLI CALL", h: "Promise logged.<br>Reminder ready.", p: "₹1,280 paid on the call, ₹3,250 promised for tomorrow — tracked automatically." },
+};
+
+const PHONE = {
+  khata: {
+    beats: [one("home", 0), ...seq("credit-type", 0.6, 2.0), one("credit-reply", 2.2, true),
+            one("sheet-ramesh", 6.4), ...seq("payment-type", 11.0, 12.3), one("payment-reply", 12.5, true),
+            ...seq("newcust-type", 17.4, 18.7), one("newcust-reply", 18.9, true)],
+    cams: [[0, 1, .5], [0.5, 1.32, .42], [2.0, 1.32, .42], [2.7, 1.42, .5], [6.0, 1.42, .5], [6.7, 1.0, .5], [10.4, 1.12, .3],
+           [10.9, 1.32, .42], [12.3, 1.32, .42], [13.0, 1.42, .5], [16.9, 1.42, .5], [17.4, 1.32, .42], [18.7, 1.32, .42],
+           [19.4, 1.42, .52], [23, 1.46, .52]],
+    copy: [[0, "say"], [2.3, "credit"], [6.5, "sheet"], [12.6, "pay"], [19.0, "newc"]],
+  },
+  voice: {
+    beats: [...seq("voice-listen", 0.3, 5.6), one("voice-reply", 5.8, true),
+            ...seq("lend-type", 10.6, 11.8), one("lend-reply", 12.0, true),
+            ...seq("lend2-type", 17.8, 18.8), one("lend2-reply", 19.0, true)],
+    cams: [[0, 1.0, .5], [1.0, 1.3, .32], [5.4, 1.3, .32], [6.1, 1.4, .5], [10.2, 1.4, .5], [10.6, 1.3, .42], [11.8, 1.3, .42],
+           [12.4, 1.48, .5], [17.4, 1.48, .5], [17.8, 1.3, .42], [18.8, 1.3, .42], [19.4, 1.48, .5], [24, 1.5, .5]],
+    copy: [[0, "voice"], [5.9, "voice2"], [10.6, "lend"], [12.1, "lendNo"], [19.1, "lendYes"]],
+    chips: [[0.5, 1], [6.0, 2], [6.5, 3], [7.0, 4], [10.4, 0]],
+  },
+  intel: {
+    beats: [one("dash-scores", 0), one("calls-list", 4.0), ...seq("call-live", 5.2, 10.8), one("call-result", 11.0)],
+    cams: [[0, 1.0, .5], [3.6, 1.12, .45], [4.2, 1.1, .4], [5.2, 1.42, .48], [10.6, 1.5, .5], [11.3, 1.42, .24], [16, 1.56, .24]],
+    copy: [[0, "score"], [4.1, "call"], [11.1, "callDone"]],
+  },
+};
+
+let lastA = null;
+function setImg(el, f) { if (el.dataset.f !== f) { el.src = IMG[f].src; el.dataset.f = f; } }
+
+function drawPhone(def, t, appear) {
+  // which beat is active
+  let cur = 0;
+  def.beats.forEach((b, i) => { if (t >= b.t) cur = i; });
+  const b = def.beats[cur], prev = def.beats[cur - 1];
+  const fadeK = b.cut || !prev ? 1 : ease((t - b.t) / 0.35);
+  setImg($("imB"), b.f); $("imB").style.opacity = fadeK;
+  if (prev) setImg($("imA"), prev.f); $("imA").style.opacity = prev ? 1 : 0;
+  // camera
+  const c = def.cams; let i = 0;
+  while (i < c.length - 1 && t > c[i + 1][0]) i++;
+  const [t0, z0, y0] = c[i], [t1, z1, y1] = c[Math.min(i + 1, c.length - 1)];
+  const k = t1 > t0 ? ease((t - t0) / (t1 - t0)) : 1;
+  const z = lerp(z0, z1, k), fy = lerp(y0, y1, k);
+  const px = 1093 + 12 + 203, py = 84 + 12 + 4 + fy * 880;     // focus point on the stage
+  const pull = clamp((z - 1) / 0.5);                            // the closer, the more centred
+  const tx = (1308 - px) * pull, ty = (540 - py) * pull;
+  const rise = (1 - eout(appear)) * 700;
+  $("world").style.transform = `translate(${tx}px, ${ty + rise}px) translate(${px}px, ${py}px) scale(${z}) translate(${-px}px, ${-py}px)`;
+}
+
+function copyHTML(c) {
+  return `<div class="kicker">${c.k}</div><h1>${c.h}</h1><p>${c.p}</p>${c.n ? `<div class="note">${c.n}</div>` : ""}`;
+}
+function drawCopy(list, t, alpha = 1) {
+  let cur = -1; list.forEach((x, i) => { if (t >= x[0]) cur = i; });
+  const A = $("copyA"), B = $("copyB");
+  if (cur < 0) { A.style.opacity = B.style.opacity = 0; return; }
+  const [ts, key] = list[cur];
+  const k = ease((t - ts) / 0.5);
+  if (B.dataset.k !== key) { B.innerHTML = copyHTML(COPY[key]); B.dataset.k = key; }
+  const prevKey = cur > 0 ? list[cur - 1][1] : null;
+  if (prevKey && A.dataset.k !== prevKey) { A.innerHTML = copyHTML(COPY[prevKey]); A.dataset.k = prevKey; }
+  A.style.opacity = prevKey ? (1 - k) * alpha : 0; A.style.transform = `translateY(${-20 * k}px)`;
+  B.style.opacity = k * alpha; B.style.transform = `translateY(${24 * (1 - k)}px)`;
+  [A, B].forEach((e) => { e.style.top = "50%"; e.style.marginTop = "-" + (e.offsetHeight / 2) + "px"; });
+}
+
+function show(el, on) { $(el).style.display = on ? "" : "none"; }
+
+function drawCaption(t) {
+  const span = document.querySelector("#cap span");
+  let txt = "", a = 0;
+  for (const [s, e, text] of NARR) {
+    if (t < s || t > e) continue;
+    const parts = text.match(/[^.?!]+[.?!]+["”]?|[^.?!]+$/g).map((x) => x.trim());
+    const total = parts.reduce((n, p) => n + p.length, 0);
+    let acc = s;
+    for (const p of parts) {
+      const d = (e - s) * p.length / total;
+      if (t >= acc && t < acc + d) { txt = p; a = Math.min(ramp(t, acc, acc + .2), 1 - ramp(t, acc + d - .15, acc + d)); }
+      acc += d;
+    }
+  }
+  span.textContent = txt; $("cap").style.opacity = txt ? Math.max(a, .001) : 0;
+}
+
+// ---------- scenes ----------
+function sceneProblem(t) {
+  $("bgLight").style.opacity = 0; show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
+  $("ruled").style.opacity = .9 * ramp(t, 0, 2);
+  const L = [
+    [0.6, "In every kirana store, there is a notebook.", "big"],
+    [4.2, "Who owes what. Since when. Who promised to pay.", "mid"],
+    [8.4, "All of it, in one person's memory.", "mid"],
+  ];
+  $("full").innerHTML = L.map(([s, txt, cls], i) => {
+    const k = eout((t - s) / 1.1);
+    return `<div class="${cls}" style="opacity:${k};transform:translateY(${(1 - k) * 26}px);margin:${i ? 26 : 0}px 0 0">${txt}</div>`;
+  }).join("");
+}
+
+function fmtIN(n) { return Math.round(n).toLocaleString("en-IN"); }
+function blk(t, a, b, inner) {
+  const k = Math.min(eout(ramp(t, a, a + .9)), 1 - ease(ramp(t, b - .5, b)));
+  if (k <= 0) return "";
+  return `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:${k};transform:translateY(${(1 - eout(ramp(t, a, a + .9))) * 20}px)">${inner}</div>`;
+}
+// the visual motif: a voice waveform. amp 0 = flat line, 1 = speaking
+function wave(t, n, width, height, amp, color = "#5aa8ff") {
+  const gap = width / n, bw = gap * .46;
+  let r = "";
+  for (let i = 0; i < n; i++) {
+    const x = i / (n - 1), env = Math.sin(Math.PI * x) ** 1.4;
+    const v = .5 + .5 * Math.sin(t * 6.1 + i * .71) * Math.sin(t * 2.3 + i * .37) + .25 * Math.sin(t * 9.7 + i * 1.9);
+    const h = Math.max(bw, height * env * clamp(v) * amp);
+    r += `<rect x="${i * gap + (gap - bw) / 2}" y="${(height - h) / 2}" width="${bw}" height="${h}" rx="${bw / 2}" fill="${color}" opacity="${.35 + .65 * env}"/>`;
+  }
+  return `<svg width="${width}" height="${height}">${r}</svg>`;
+}
+const PERSON = (c) => `<svg width="120" height="150" viewBox="0 0 120 150"><circle cx="60" cy="40" r="30" fill="${c}"/><path d="M8 148c0-38 23-62 52-62s52 24 52 62z" fill="${c}"/></svg>`;
+
+function sceneStats(t) {
+  $("bgLight").style.opacity = 0; show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
+  $("ruled").style.opacity = 0;
+  let h = "";
+  // 1 — 1.3 crore kirana stores
+  const n = 13000000 * ease(ramp(t, 0.6, 3.2));
+  h += blk(t, 0.3, 6.4, `
+    <div class="kick">INDIA RUNS ON KIRANA</div>
+    <div class="hero" style="margin-top:36px">${fmtIN(n)}</div>
+    <div class="sub" style="margin-top:22px">kirana stores — on every street, in every town</div>
+    <div style="margin-top:64px;opacity:${ramp(t, 1.0, 2.0)}">${wave(t, 64, 900, 70, .55)}</div>
+    <div class="src">Source: All India Consumer Products Distributors Federation (AICPDF), via Storyboard18</div>`);
+  // 2 — only 1.4 million digital
+  const fill = ease(ramp(t, 7.4, 9.0)) * 10.8;
+  h += blk(t, 6.6, 12.4, `
+    <div class="h2">Only <span class="blue">1.4 million</span> are digital.</div>
+    <div style="position:relative;width:1240px;height:64px;border-radius:32px;background:rgba(255,122,102,.22);margin-top:70px;overflow:hidden">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:${fill}%;background:linear-gradient(90deg,#4a97f5,#2f6fd6);border-radius:32px"></div></div>
+    <div style="width:1240px;display:flex;justify-content:space-between;margin-top:20px;font-size:26px;font-weight:600">
+      <span class="blue" style="opacity:${ramp(t, 8.6, 9.4)}">1.4 M digital</span>
+      <span class="red" style="opacity:${ramp(t, 9.0, 9.8)}">11.6 M still on paper</span></div>
+    <div class="sub" style="margin-top:56px;opacity:${ramp(t, 9.6, 10.6)}">Nine in ten still keep the khata in a notebook.</div>
+    <div class="src">Source: AICPDF via Storyboard18 — about 1.4 million of 13 million kiranas digitised</div>`);
+  // 3 — one in three on credit
+  const p = (i) => eout(ramp(t, 13.0 + i * .35, 13.8 + i * .35));
+  h += blk(t, 12.6, 18.2, `
+    <div style="display:flex;gap:70px;align-items:flex-end">
+      ${[0, 1, 2].map((i) => `<div style="text-align:center;opacity:${p(i)};transform:translateY(${(1 - p(i)) * 30}px)">
+        ${PERSON(i === 2 && t > 14.6 ? "#ff7a66" : "rgba(169,191,220,.35)")}
+        <div style="height:46px;margin-top:14px">${i === 2 && t > 14.6 ? `<span class="pill" style="border-color:#ff7a66;color:#ff9a8a;font-size:24px;padding:8px 20px">udhaar</span>` : ""}</div></div>`).join("")}
+    </div>
+    <div class="h2" style="margin-top:48px"><span class="red">1 in 3</span> customers buy on credit.</div>
+    <div class="sub" style="margin-top:16px;opacity:${ramp(t, 15.2, 16.2)}">Given on trust. Remembered by hand.</div>
+    <div class="src">Source: Flourish Ventures, Bain & Company and 60 Decibels — survey of kirana shoppers in India, Brazil, Egypt and Indonesia</div>`);
+  // 4 — the khata notebook
+  const r = (i) => `opacity:${eout(ramp(t, 19.0 + i * .5, 19.6 + i * .5))}`;
+  h += blk(t, 18.4, 24, `
+    <div class="khatapage" style="transform:rotate(-1.6deg)"><div class="cover"></div>
+      <div class="row" style="${r(0)}"><span>रमेश — saaman</span><span>₹500</span></div>
+      <div class="row" style="${r(1)}"><span>Gupta ji — 15 tareekh tak</span><span>₹1,200 ?</span></div>
+      <div class="row" style="${r(2)}"><span>शर्मा — aadha diya</span><span><s>₹2,000</s> ₹1,000</span></div>
+      <div class="row" style="${r(3)};color:#c0392b"><span>Chauhan — phir aayenge!!</span><span>₹7,530</span></div>
+    </div>
+    <div class="h2" style="margin-top:70px;opacity:${ramp(t, 21.0, 22.0)}">Written by hand. <span class="red">Chased in person.</span></div>`);
+  $("full").innerHTML = h;
+}
+
+function sceneIdea(t) {
+  $("bgLight").style.opacity = 0; $("ruled").style.opacity = 0;
+  show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
+  const talk = clamp(ramp(t, 1.0, 1.6) - ramp(t, 3.0, 3.6));
+  let h = blk(t, 0.2, 3.7, `
+    <div class="h2" style="font-size:72px">What if the shopkeeper could just</div>
+    <div class="hero" style="font-size:140px;margin-top:14px;color:#5aa8ff;opacity:${eout(ramp(t, 1.0, 1.8))}">say it?</div>
+    <div style="margin-top:50px">${wave(t, 48, 760, 120, .15 + .85 * talk)}</div>`);
+  const P = [["🎙️", "Bolo", "Speak an entry"], ["🛡️", "Bharosa", "Know before you lend"], ["📞", "Vasooli", "Let the agent collect"]];
+  h += blk(t, 3.8, 7.4, `<div style="display:flex;gap:40px">${P.map(([ic, a, b], i) => {
+      const k = eout(ramp(t, 4.0 + i * .45, 4.9 + i * .45));
+      return `<div class="card" style="opacity:${k};transform:translateY(${(1 - k) * 30}px)"><div class="ic">${ic}</div>
+        <div class="w">${a}</div><div class="d">${b}</div></div>`; }).join("")}</div>`);
+  const kl = eout(ramp(t, 7.6, 8.5));
+  h += blk(t, 7.5, 10, `
+    <div class="logo" style="opacity:${kl};transform:scale(${.75 + .25 * kl})">${LOGO}</div>
+    <div class="big" style="font-size:100px;margin-top:36px;color:#fff">Bol-Khata</div>
+    <div class="sub" style="margin-top:10px">Bolke khata. Bolke vasooli.</div>`);
+  $("full").innerHTML = h;
+}
+
+function sceneImpact(t) {
+  $("bgLight").style.opacity = 0; $("ruled").style.opacity = 0;
+  show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
+  const L = ["No typing", "No English menus", "No forgotten udhaar"];
+  let h = blk(t, 0.2, 5.6, `
+    <div class="hero" style="font-size:128px">${fmtIN(13000000)}</div>
+    <div class="h2" style="font-size:56px;margin-top:14px">counters. <span class="blue">Each one can now just speak.</span></div>
+    <div style="display:flex;gap:24px;margin-top:60px">${L.map((x, i) => {
+      const k = eout(ramp(t, 1.8 + i * .5, 2.6 + i * .5));
+      return `<div class="pill" style="opacity:${k};transform:translateY(${(1 - k) * 14}px)">${x}</div>`; }).join("")}</div>`);
+  const w = ["Your dukaan.", "Your voice.", "Your digital khata."], kl = eout(ramp(t, 5.8, 6.7));
+  const calm = 1 - ramp(t, 10.5, 12.5);
+  h += blk(t, 5.7, 99, `
+    <div class="logo" style="width:112px;height:112px;border-radius:32px;opacity:${kl};transform:scale(${.8 + .2 * kl})">${LOGO.replace(/82/g, "68")}</div>
+    <div class="big" style="font-size:96px;margin-top:30px;color:#fff;opacity:${eout(ramp(t, 6.1, 7.0))}">Bol-Khata</div>
+    <div style="display:flex;gap:24px;margin-top:20px">${w.map((x, i) => {
+      const k = eout(ramp(t, 6.9 + i * .5, 7.7 + i * .5));
+      return `<div style="font-size:44px;font-weight:600;color:${i === 2 ? "#5aa8ff" : "#dbe7f7"};opacity:${k};transform:translateY(${(1 - k) * 14}px)">${x}</div>`; }).join("")}</div>
+    <div style="margin-top:44px;opacity:${ramp(t, 8.4, 9.2)}">${wave(t, 40, 560, 60, .45 * calm + .04)}</div>
+    <div style="margin-top:34px;font-size:22px;color:#7f97b8;opacity:${ramp(t, 9.0, 9.8)}">github.com/mitalijain0606-ux/Bol-Khata</div>
+    <div style="margin-top:10px;font-size:18px;color:#5f7898;opacity:${ramp(t, 9.3, 10.1)}">Built for the Great Indian AI Internship Challenge · speech by Gnani AI</div>`);
+  $("full").innerHTML = h;
+}
+
+function sceneReveal(t) {
+  show("chips", 0); show("arch", 0); $("ruled").style.opacity = .9 * (1 - ramp(t, 0, 1.5));
+  $("bgLight").style.opacity = ease(ramp(t, 3.8, 5.2));
+  // brand moment
+  const out = ease(ramp(t, 3.6, 4.6));
+  show("full", out < 1);
+  const kl = eout(ramp(t, 0.3, 1.5)), kt = eout(ramp(t, 1.0, 2.2)), ks = eout(ramp(t, 1.7, 2.9));
+  $("full").innerHTML = `<div style="opacity:${1 - out};transform:scale(${1 + out * .06})">
+    <div class="logo" style="margin:0 auto;opacity:${kl};transform:scale(${.7 + .3 * kl})">${LOGO}</div>
+    <div class="big" style="font-size:96px;margin-top:40px;opacity:${kt};transform:translateY(${(1 - kt) * 20}px)">Bol-Khata</div>
+    <div class="mid" style="margin-top:14px;opacity:${ks}">Bolke khata. Bolke vasooli.</div></div>`;
+  show("world", t > 4.4); show("side", t > 4.6);
+  if (t > 4.4) drawPhone(PHONE.reveal, t, ramp(t, 4.4, 6.0));
+  if (t > 4.6) drawCopy(PHONE.reveal.copy, t);
+}
+
+function scenePhone(def) {
+  return (t) => {
+    $("bgLight").style.opacity = 1; $("ruled").style.opacity = 0;
+    show("full", 0); show("arch", 0); show("world", 1); show("side", 1);
+    drawPhone(def, t, 1);
+    drawCopy(def.copy, t);
+    show("chips", !!def.chips);
+    if (def.chips) {
+      let lit = 0, vis = 1;
+      def.chips.forEach(([s, n]) => { if (t >= s) { if (n === 0) vis = 0; else lit = n; } });
+      const hideK = def.chips.find((c) => c[1] === 0);
+      const fade = hideK ? 1 - ramp(t, hideK[0], hideK[0] + .5) : 1;
+      $("chips").style.opacity = ramp(t, 0.2, 0.8) * fade;
+      for (let i = 1; i <= 4; i++) $("c" + i).classList.toggle("on", i <= lit);
+    }
+  };
+}
+
+function sceneTech(t) {
+  t = t * 1.4;
+  $("bgLight").style.opacity = 0; $("ruled").style.opacity = 0;
+  show("world", 0); show("side", 0); show("chips", 0); show("full", 0); show("arch", 1);
+  const B = [
+    // [appear t, x, y, cls, tag, name, sub]
+    [0.6, 150, 300, "", "FRONTEND", "React PWA", "Any phone, in the browser"],
+    [1.4, 620, 300, "", "BACKEND", "FastAPI", "Auth · ledger · agent"],
+    [2.4, 1150, 110, "gnani", "GNANI · SPEECH-TO-TEXT", "Prisma", "Hinglish, Hindi, Marathi, Tamil"],
+    [3.2, 1150, 300, "ext", "REASONING · EXTERNAL LLM", "GPT-OSS 20B on Groq", "Tool calls over the khata"],
+    [4.0, 1150, 490, "", "GUARDRAIL", "Rule engine", "Settle, undo, credit advice"],
+    [4.8, 1150, 680, "gnani", "GNANI · TEXT-TO-SPEECH", "Timbre v2.5", "Replies and call voices"],
+    [5.6, 620, 560, "", "DATA", "SQLite ledger", "Entries · promises · calls"],
+  ];
+  let h = `<div style="position:absolute;left:150px;top:64px;font-size:19px;font-weight:700;letter-spacing:.22em;color:#5aa8ff;opacity:${ramp(t, 0, .8)}">UNDER THE HOOD</div>`;
+  const lines = [[[480, 360], [620, 360], 1.2], [[950, 360], [1150, 170], 2.2], [[950, 360], [1150, 360], 3.0], [[950, 380], [1150, 550], 3.8],
+                 [[950, 400], [1150, 740], 4.6], [[785, 430], [785, 560], 5.4]];
+  h += `<svg width="1920" height="1080" style="position:absolute;inset:0">` + lines.map(([[x1, y1], [x2, y2], s]) => {
+    const k = ease(ramp(t, s, s + .7)), len = Math.hypot(x2 - x1, y2 - y1);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(140,180,235,.45)" stroke-width="2.5" stroke-dasharray="${len}" stroke-dashoffset="${len * (1 - k)}"/>`;
+  }).join("") + `</svg>`;
+  h += B.map(([s, x, y, cls, tg, n, sub]) => {
+    const k = eout(ramp(t, s, s + .8));
+    return `<div class="box ${cls}" style="left:${x}px;top:${y}px;opacity:${k};transform:translateY(${(1 - k) * 18}px)"><div class="t">${tg}</div><div class="n">${n}</div><div class="s">${sub}</div></div>`;
+  }).join("");
+  const lk = ramp(t, 6.4, 7.2);
+  h += `<div class="legend" style="opacity:${lk}"><span><i class="sw" style="background:rgba(47,125,225,.5);border:1.5px solid #5caafa"></i>Gnani models</span>
+        <span><i class="sw" style="border:1.5px dashed rgba(255,255,255,.5)"></i>External LLM (not Gnani)</span>
+        <span>Evon is not used in this build.</span></div>`;
+  $("arch").innerHTML = h;
+}
+
+function sceneEnd(t) {
+  $("bgLight").style.opacity = 0; $("ruled").style.opacity = 0;
+  show("world", 0); show("side", 0); show("chips", 0); show("arch", 0); show("full", 1);
+  const w = ["Your dukaan.", "Your voice.", "Your digital khata."];
+  const kl = eout(ramp(t, 0.2, 1.2));
+  $("full").innerHTML = `<div class="logo" style="margin:0 auto 34px;width:104px;height:104px;border-radius:30px;opacity:${kl};transform:scale(${.8 + .2 * kl})">${LOGO.replace(/82/g, "64")}</div>
+    <div class="big" style="font-size:84px;opacity:${eout(ramp(t, .6, 1.6))}">Bol-Khata</div>
+    <div style="display:flex;gap:26px;margin-top:26px">${w.map((x, i) => {
+      const k = eout(ramp(t, 1.6 + i * .7, 2.5 + i * .7));
+      return `<div class="mid" style="color:${i === 2 ? "#7dbbff" : "#cfdcef"};opacity:${k};transform:translateY(${(1 - k) * 16}px)">${x}</div>`;
+    }).join("")}</div>
+    <div style="margin-top:70px;font-size:22px;color:#7f97b8;opacity:${ramp(t, 4.2, 5)}">github.com/mitalijain0606-ux/Bol-Khata</div>
+    <div style="margin-top:12px;font-size:19px;color:#5f7898;opacity:${ramp(t, 4.6, 5.4)}">Built for the Great Indian AI Internship Challenge · speech by Gnani AI</div>`;
+}
+
+const FN = { stats: sceneStats, idea: sceneIdea, khata: scenePhone(PHONE.khata), voice: scenePhone(PHONE.voice),
+             intel: scenePhone(PHONE.intel), tech: sceneTech, impact: sceneImpact };
+
+window.render = async (T) => {
+  const sc = SCENES.find(([, s, e]) => T >= s && T < e) || SCENES[SCENES.length - 1];
+  const [name, s, e] = sc, t = T - s, dur = e - s;
+  FN[name](t);
+  // captions only where the picture doesn't already say it in words
+  const quiet = ["stats", "idea", "tech", "impact"].includes(name);
+  if (quiet) $("cap").style.opacity = 0; else drawCaption(T);
+  // fades through navy at every scene boundary
+  const first = name === SCENES[0][0], last = name === SCENES[SCENES.length - 1][0];
+  const fin = first ? ramp(t, 0, 0.9) : ramp(t, 0, 0.45);
+  const fout = last ? 1 - ramp(t, dur - 1.4, dur - 0.1) : 1 - ramp(t, dur - 0.45, dur);
+  $("veil").style.opacity = 1 - Math.min(fin, fout);
+  const imgs = [$("imA"), $("imB")].filter((i) => i.src && !i.complete);
+  await Promise.all(imgs.map((i) => i.decode().catch(() => {})));
+  return name;
+};
+</script>
+</body></html>

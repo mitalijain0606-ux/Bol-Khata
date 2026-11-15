@@ -1,0 +1,30 @@
+{
+  "fps": 30,
+  "duration": 120,
+  "scenes": [
+    ["stats", 0, 24],
+    ["idea", 24, 34],
+    ["khata", 34, 57],
+    ["voice", 57, 81],
+    ["intel", 81, 97],
+    ["tech", 97, 107],
+    ["impact", 107, 120]
+  ],
+  "narration": [
+    [0.6, 6.2, "India has thirteen million kirana stores."],
+    [6.6, 12.2, "Only about one in ten keeps its books digitally. The rest run on a notebook."],
+    [12.6, 17.8, "And one in three customers buys on udhaar — credit, on trust."],
+    [18.2, 23.6, "Every rupee of it is written by hand, and chased in person."],
+    [24.2, 33.6, "So I asked: what if the shopkeeper could just say it? Bol-Khata — speak an entry, know before you lend, and let the agent collect."],
+    [34.4, 40.0, "Ramesh ne paanch sau rupaye udhaar liye. Written to Ramesh Mishra's khata, balance read back."],
+    [40.4, 45.2, "Every customer has a full khata, with a one-tap WhatsApp reminder."],
+    [45.6, 51.0, "Payments bring the balance down instantly."],
+    [51.4, 56.6, "And a new name simply opens a new khata — no forms."],
+    [57.4, 67.8, "Or just speak. Gnani Prisma turns speech into text, the agent updates the khata, and Gnani Timbre speaks the answer back."],
+    [68.2, 75.0, "Before lending, ask. Chauhan ji has broken two promises — so Bol-Khata says no."],
+    [75.6, 80.6, "Sharma ji always pays on time. Yes."],
+    [81.4, 96.6, "When money is overdue, the agent makes the collections call itself — politely agreeing a date and logging the promise. Here, with a simulated customer."],
+    [97.4, 106.4, "Gnani Prisma and Timbre for speech, GPT-OSS on Groq for reasoning, and a rule engine guarding every rupee."],
+    [107.6, 119.0, "Thirteen million counters. Each one can now just speak — no typing, no forgotten udhaar. Bol-Khata: your dukaan, your voice, your digital khata."]
+  ]
+}
