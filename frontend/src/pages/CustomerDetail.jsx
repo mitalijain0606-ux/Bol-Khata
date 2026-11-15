@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { fmt, fmtDate, whatsappLink } from "../util.js";
+import { Icon } from "../icons.jsx";
 
 const PROMISE_LABEL = { PENDING: "⏳ Pending", KEPT: "✅ Poora kiya", BROKEN: "❌ Toda" };
 const OUTCOME_LABEL = { PROMISE: "Wada mila", PARTIAL: "Thoda mila + wada", REFUSED: "Wada nahi", IN_PROGRESS: "Adhoori" };
@@ -63,7 +64,7 @@ export default function CustomerDetail({ cid, me, onClose, onChanged }) {
             {data.entries.length === 0 && <div className="empty">Koi entry nahi.</div>}
             {data.entries.map((e) => (
               <div key={e.id} className={"entry " + (e.type === "UDHAAR" ? "udhaar" : "payment")}>
-                <div className="tag">{e.type === "UDHAAR" ? "📕" : "💰"}</div>
+                <div className="tag"><Icon name={e.type === "UDHAAR" ? "up" : "down"} size={19} stroke={2.2} /></div>
                 <div className="meta">
                   <b>{e.type === "UDHAAR" ? "Udhaar" : "Payment"} · {fmtDate(e.created_at, { relative: false })}</b>
                   <span>{e.raw_transcript || e.items_text || "—"}</span>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api, getToken, clearToken } from "./api.js";
 import { speechSupported } from "./voice.js";
 import Logo from "./Logo.jsx";
+import { Icon } from "./icons.jsx";
 import Auth from "./pages/Auth.jsx";
 import Khata from "./pages/Khata.jsx";
 import CallScreen from "./pages/CallScreen.jsx";
@@ -12,10 +13,10 @@ const THEME_KEY = "bolkhata_theme_v2";
 const applyTheme = (t) => document.body.classList.toggle("light", t === "light");
 
 const TABS = [
-  { key: "khata", ic: "🎤", label: "Khata" },
-  { key: "call", ic: "📞", label: "Calls" },
-  { key: "dash", ic: "📊", label: "Hisaab" },
-  { key: "set", ic: "⚙️", label: "Setting" },
+  { key: "khata", ic: "mic", label: "Khata" },
+  { key: "call", ic: "phone", label: "Calls" },
+  { key: "dash", ic: "chart", label: "Hisaab" },
+  { key: "set", ic: "gear", label: "Setting" },
 ];
 
 export default function App() {
@@ -61,7 +62,7 @@ export default function App() {
     return (
       <>
         <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
-          {theme === "dark" ? "☀️" : "🌙"}
+          <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
         </button>
         <Auth onLogin={refreshMe} />
       </>
@@ -81,11 +82,11 @@ export default function App() {
           </div>
         </div>
         <button className="theme-fab" onClick={toggleTheme} title="Theme badlo">
-          {theme === "dark" ? "☀️" : "🌙"}
+          <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
         </button>
       </header>
 
-      <main className="page">
+      <main className="page" key={tab}>
         {tab === "khata" && <Khata gnani={live} onNav={setTab} me={authed} />}
         {tab === "call" && <CallScreen me={authed} onNav={setTab} />}
         {tab === "dash" && <Dashboard onNav={setTab} me={authed} />}
@@ -95,7 +96,7 @@ export default function App() {
       <nav className="navbar">
         {TABS.map((t) => (
           <button key={t.key} className={tab === t.key ? "active" : ""} onClick={() => setTab(t.key)}>
-            <span className="ic">{t.ic}</span>
+            <span className="ic"><Icon name={t.ic} size={21} /></span>
             {t.label}
           </button>
         ))}

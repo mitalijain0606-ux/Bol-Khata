@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../api.js";
 import { speak, stopSpeaking } from "../voice.js";
 import { fmt } from "../util.js";
+import { useCountUp } from "../icons.jsx";
 import CustomerDetail from "./CustomerDetail.jsx";
 
 const RING_COLORS = { Naya: "var(--blue)", Pakka: "var(--green)", "Theek-thaak": "var(--amber)", "Sambhal ke": "var(--orange)", Risky: "var(--red)" };
@@ -25,6 +26,9 @@ export default function Dashboard({ onNav, me }) {
     return () => stopSpeaking();
   }, []);
 
+  const owed = useCountUp(totals ? (totals.outstanding ?? totals.udhaar_total) : null);
+  const recovered = useCountUp(totals ? totals.cash_in_total : null);
+
   const playBriefing = () => brief && speak(brief.reply, { pitch: 1, rate: 1 });
 
   return (
@@ -32,11 +36,11 @@ export default function Dashboard({ onNav, me }) {
       <div className="card">
         <div className="row">
           <div className="stat">
-            <div className="num amber">{totals ? fmt(totals.outstanding ?? totals.udhaar_total) : "—"}</div>
+            <div className="num red">{owed != null ? fmt(owed) : "—"}</div>
             <div className="lbl">Atka udhaar</div>
           </div>
           <div className="stat">
-            <div className="num green">{totals ? fmt(totals.cash_in_total) : "—"}</div>
+            <div className="num green">{recovered != null ? fmt(recovered) : "—"}</div>
             <div className="lbl">Vasooli hui</div>
           </div>
         </div>
@@ -44,7 +48,7 @@ export default function Dashboard({ onNav, me }) {
 
       <div className="card briefing">
         <h3>Subah ki briefing</h3>
-        <div>{brief?.reply || "Briefing load ho rahi hai…"}</div>
+        {brief?.reply ? <div>{brief.reply}</div> : <><div className="skel" style={{ height: 18 }} /><div className="skel" style={{ height: 18, width: "70%" }} /></>}
         <div className="actions">
           <button className="btn" onClick={playBriefing} disabled={!brief}>▶ Sunao</button>
           <button className="btn ghost" onClick={() => onNav("call")}>📞 Aaj ke calls</button>
@@ -53,7 +57,7 @@ export default function Dashboard({ onNav, me }) {
 
       <div className="card">
         <h3>Bharaut-Score — kise udhaar dena chahiye</h3>
-        {scores === null && <div className="empty">Data load ho raha hai…</div>}
+        {scores === null && <>{[0, 1, 2, 3].map((i) => <div key={i} className="skel" />)}</>}
         {scores?.length === 0 && <div className="empty">Abhi koi customer nahi — pehli entry bolke likhiye.</div>}
         {(scores || []).map((s, i) => (
           <div key={s.customer + i}>

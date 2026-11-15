@@ -17,13 +17,10 @@ INIT = r"""
 (() => {
   // Noto for Devanagari/Tamil glyphs only (the Linux recorder lacks them)
   const css = `
-  @font-face{font-family:"Avenir Next";src:url(/__vf/dev400) format("woff2");font-weight:100 500;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+A830-A839,U+A8E0-A8FF;}
-  @font-face{font-family:"Avenir Next";src:url(/__vf/dev600) format("woff2");font-weight:501 900;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+A830-A839,U+A8E0-A8FF;}
-  @font-face{font-family:"Avenir Next";src:url(/__vf/ta400) format("woff2");font-weight:100 500;unicode-range:U+0B80-0BFF;}
-  @font-face{font-family:"Avenir Next";src:url(/__vf/ta600) format("woff2");font-weight:501 900;unicode-range:U+0B80-0BFF;}
-  @font-face{font-family:"Avenir Next";src:local("Inter");font-weight:100 500;unicode-range:U+0000-024F,U+20B9,U+2014,U+2018-201D,U+2022,U+2192,U+2212;}
-  @font-face{font-family:"Avenir Next";src:local("Inter SemiBold");font-weight:501 650;unicode-range:U+0000-024F,U+20B9,U+2014,U+2018-201D,U+2022,U+2192,U+2212;}
-  @font-face{font-family:"Avenir Next";src:local("Inter Bold"),local("Inter ExtraBold");font-weight:651 900;unicode-range:U+0000-024F,U+20B9,U+2014,U+2018-201D,U+2022,U+2192,U+2212;}`;
+  @font-face{font-family:"Inter Variable";src:url(/__vf/dev400) format("woff2");font-weight:100 500;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+A830-A839,U+A8E0-A8FF;}
+  @font-face{font-family:"Inter Variable";src:url(/__vf/dev600) format("woff2");font-weight:501 900;unicode-range:U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+A830-A839,U+A8E0-A8FF;}
+  @font-face{font-family:"Inter Variable";src:url(/__vf/ta400) format("woff2");font-weight:100 500;unicode-range:U+0B80-0BFF;}
+  @font-face{font-family:"Inter Variable";src:url(/__vf/ta600) format("woff2");font-weight:501 900;unicode-range:U+0B80-0BFF;}`;
   const add = () => { const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
   if (document.head) add(); else document.addEventListener("DOMContentLoaded", add);
 

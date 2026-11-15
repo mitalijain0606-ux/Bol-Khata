@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api.js";
 import CustomerDetail from "./CustomerDetail.jsx";
 import { fmt } from "../util.js";
+import { Icon, useCountUp } from "../icons.jsx";
 import { speak, startListening, stopListening, stopSpeaking, speechSupported, startRecording, transcribeViaCloud } from "../voice.js";
 
 const LANGS = [
@@ -23,6 +24,9 @@ export default function Khata({ gnani, onNav, me }) {
   const [busy, setBusy] = useState(false);
   const [lang, setLang] = useState("hi-IN");
   const logRef = useRef(null);
+  const owed = useCountUp(totals ? (totals.outstanding ?? totals.udhaar_total) : null);
+  const cashToday = useCountUp(totals ? totals.cash_in_today : null);
+  const udhaarToday = useCountUp(totals ? totals.udhaar_today : null);
   const recRef = useRef(null);
 
   const refreshFeed = () => {
@@ -119,15 +123,15 @@ export default function Khata({ gnani, onNav, me }) {
       <div className="card mic-card">
         <div className="row">
           <div className="stat">
-            <div className="num red">{totals ? fmt(totals.outstanding ?? totals.udhaar_total) : "—"}</div>
+            <div className="num red">{owed != null ? fmt(owed) : "—"}</div>
             <div className="lbl">Kul baki udhaar</div>
           </div>
           <div className="stat">
-            <div className="num green">{totals ? fmt(totals.cash_in_today) : "—"}</div>
+            <div className="num green">{cashToday != null ? fmt(cashToday) : "—"}</div>
             <div className="lbl">Aaj cash aaya</div>
           </div>
           <div className="stat">
-            <div className="num amber">{totals ? fmt(totals.udhaar_today) : "—"}</div>
+            <div className="num amber">{udhaarToday != null ? fmt(udhaarToday) : "—"}</div>
             <div className="lbl">Aaj udhaar</div>
           </div>
         </div>
@@ -143,9 +147,13 @@ export default function Khata({ gnani, onNav, me }) {
         </div>
 
         <div className="mic-wrap">
-          <button className={"mic-orb" + (listening ? " listening" : "")} onClick={toggleMic} disabled={busy}>
-            {listening ? "◼" : "🎤"}
+          <button className={"mic-orb" + (listening ? " listening" : busy ? " thinking" : "")}
+                  onClick={toggleMic} disabled={busy} aria-label={listening ? "Sunna band karo" : "Bolo"}>
+            <Icon name={listening ? "stop" : "mic"} size={42} stroke={2} />
           </button>
+          <div className={"wave" + (listening ? " on" : "")} aria-hidden="true">
+            {Array.from({ length: 11 }, (_, i) => <i key={i} />)}
+          </div>
           <div className="mic-hint">
             {listening ? <span><span className="speaking-dot" />bolo, main likh raha hoon…</span>
               : busy ? "soch raha hoon…" : "dabake boliye — entry, sawaal, ya hisaab"}
@@ -229,7 +237,7 @@ export default function Khata({ gnani, onNav, me }) {
         {entries.map((e) => (
           <div key={e.id} className={"entry tap " + (e.type === "UDHAAR" ? "udhaar" : "payment")}
                onClick={() => setOpenCid(e.customer_id)}>
-            <div className="tag">{e.type === "UDHAAR" ? "📕" : "💰"}</div>
+            <div className="tag"><Icon name={e.type === "UDHAAR" ? "up" : "down"} size={19} stroke={2.2} /></div>
             <div className="meta">
               <b>{e.customer_name}</b>
               <span>{e.items_text || e.raw_transcript || "—"}</span>
