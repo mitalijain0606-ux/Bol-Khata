@@ -312,3 +312,30 @@ class LLMRouting(unittest.TestCase):
             self.evon.httpx.AsyncClient, settings.evon_api_url = orig_client, orig_url
         self.assertEqual(sent["reasoning_format"], "hidden")
         self.assertEqual(sent["tools"][0]["type"], "function")
+
+
+class Secrets(unittest.TestCase):
+    def test_env_value_pasted_with_an_extra_line_is_trimmed(self):
+        from app import config
+        os.environ["ZZ_TEST_KEY"] = "  vach_abc123\nSPEECH_API_BASE=https://x  "
+        self.assertEqual(config._env("ZZ_TEST_KEY"), "vach_abc123")
+
+    def test_provider_errors_never_echo_the_key(self):
+        from app import main
+        from app.config import settings
+        old = settings.gnani_api_key
+        settings.gnani_api_key = "vach_supersecret_123"
+        try:
+            async def boom(*a, **k):
+                raise ValueError("Illegal header value b'vach_supersecret_123'")
+            orig = main.tts.synthesize
+            main.tts.synthesize = boom
+            c = TestClient(main.app)
+            tok = c.post("/api/auth/login", json={"phone": "9876543210", "password": "demo1234"}).json()["token"]
+            r = c.get("/api/tts?text=hi", headers={"Authorization": f"Bearer {tok}"})
+            self.assertEqual(r.status_code, 502)
+            self.assertNotIn("supersecret", r.text)
+            self.assertNotIn("supersecret", main._safe_err(ValueError("x vach_supersecret_123 y")))
+        finally:
+            main.tts.synthesize = orig
+            settings.gnani_api_key = old

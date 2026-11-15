@@ -15,7 +15,10 @@ AUDIO_DIR.mkdir(exist_ok=True)
 
 
 def _env(key: str, default: str = "") -> str:
-    return os.getenv(key, default).strip()
+    # first line only: a value pasted with a second "KEY=..." line must not
+    # end up inside an HTTP header
+    v = os.getenv(key, default) or ""
+    return (v.strip().splitlines() or [""])[0].strip()
 
 
 class Settings:

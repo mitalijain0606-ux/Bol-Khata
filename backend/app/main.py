@@ -40,6 +40,16 @@ def startup():
         T.expire_promises(conn)     # wade whose date passed while the server was off
 
 
+def _safe_err(e: Exception) -> str:
+    """Exception text with every configured secret masked. Provider errors can
+    quote request headers verbatim, so never show or log raw exception text."""
+    msg = f"{type(e).__name__}: {e}"
+    for secret in (settings.gnani_api_key, settings.evon_api_key):
+        if secret and len(secret) > 6:
+            msg = msg.replace(secret, "***")
+    return msg[:300]
+
+
 _HITS: dict[str, list[float]] = {}
 
 
@@ -318,8 +328,8 @@ async def stt_proxy(request: Request, file: UploadFile = File(...), lang: str = 
     except ProviderNotConfigured:
         return {"transcript": "", "provider": "mock"}
     except Exception as e:
-        log.warning("STT proxy failed: %s", e)
-        raise HTTPException(502, str(e))
+        log.warning("STT proxy failed: %s", _safe_err(e))
+        raise HTTPException(502, "Speech-to-text abhi nahi chal raha — thodi der baad try kijiye.")
 
 
 @app.post("/api/voice/command")
@@ -364,8 +374,8 @@ async def tts_proxy(request: Request, text: str, voice: str = "", lang: str = "h
     except ProviderNotConfigured:
         return Response(status_code=204)
     except Exception as e:
-        log.warning("TTS proxy failed: %s", e)
-        return JSONResponse({"detail": str(e)}, status_code=502)
+        log.warning("TTS proxy failed: %s", _safe_err(e))
+        return JSONResponse({"detail": "Voice service unavailable"}, status_code=502)
 
 
 # ---------------- collections call simulator ----------------
