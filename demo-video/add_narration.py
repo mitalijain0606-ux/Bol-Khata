@@ -10,7 +10,7 @@ Reads  demo-video/final-bol-khata-demo.mp4 (video + music) and narration.json
 Writes demo-video/final-bol-khata-demo-narrated.mp4
        demo-video/narration/NN.wav   (one Timbre clip per line, for re-use)
 
-Options: --voice Poorvi   --lang hi-IN   --music 0.55 (music level under the voice)
+Options: --voice Poorvi   --lang hi-IN   --music 1.0 (music level; ducked under the voice)
 """
 import argparse
 import asyncio
@@ -63,7 +63,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--voice", default="")          # empty = TTS_VOICE_AGENT from .env (Poorvi)
     ap.add_argument("--lang", default="hi-IN")
-    ap.add_argument("--music", type=float, default=0.55)
+    ap.add_argument("--music", type=float, default=1.0)
     a = ap.parse_args()
 
     ff = ffmpeg_exe()
@@ -93,12 +93,12 @@ def main():
     cmd = [ff, "-y", "-loglevel", "error", "-i", str(src)]
     for _, c in clips:
         cmd += ["-i", str(c)]
-    parts = [f"[{k + 1}:a]adelay={int(s * 1000)}|{int(s * 1000)},volume=1.6[v{k}]" for k, (s, _) in enumerate(clips)]
+    parts = [f"[{k + 1}:a]adelay={int(s * 1000)}|{int(s * 1000)}[v{k}]" for k, (s, _) in enumerate(clips)]
     n = len(clips)
     flt = ";".join(parts) + ";" + "".join(f"[v{k}]" for k in range(n)) + \
         f"amix=inputs={n}:normalize=0,alimiter=limit=0.89,apad[voice];[voice]asplit[vo][sc];" \
         f"[0:a]volume={a.music}[mu];[mu][sc]sidechaincompress=threshold=0.03:ratio=6:attack=25:release=450[duck];" \
-        "[duck][vo]amix=inputs=2:normalize=0:duration=first[aout]"
+        "[duck][vo]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.89[aout]"
     out = HERE / "final-bol-khata-demo-narrated.mp4"
     tmp = HERE / "final-bol-khata-demo-narrated.part.mp4"
     cmd += ["-filter_complex", flt, "-map", "0:v", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
