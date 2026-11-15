@@ -71,6 +71,19 @@ password: demo1234
   engine as the local fallback
 - **Speaker verification** — SpeechBrain ECAPA-TDNN (optional install)
 
+### Models used
+
+| Job | Model | Notes |
+|---|---|---|
+| Speech-to-text | **Gnani Prisma** (`/stt/v3` on the Vachana API) | Hinglish, Hindi, Marathi, Tamil voice input |
+| Text-to-speech | **Gnani Timbre v2.5** (`timbre-v2.5`) | Agent and customer voices on the collections call |
+| Reasoning | **GPT-OSS 20B via Groq** (`openai/gpt-oss-20b`) | Tool-calling agent over the ledger |
+
+Gnani's Evon reasoning model is **not** used; any OpenAI-compatible endpoint can
+be dropped in via `LLM_API_URL`. Settling a balance, undo and the
+"udhaar du?" verdict always run on the deterministic rule engine, never the LLM,
+so a model mistake can't wipe a customer's balance.
+
 ## Architecture
 
 ```

@@ -24,7 +24,12 @@ SYSTEM_PROMPT = (
 
 
 async def chat(messages: list[dict], tools: list[dict] | None = None) -> dict:
-    """Return an OpenAI-style response dict with 'choices[0].message'."""
+    """Return an OpenAI-style response dict with 'choices[0].message'.
+
+    Works against any OpenAI-compatible /chat/completions endpoint. Tested with
+    Groq (openai/gpt-oss-20b). Gnani's Evon v3.3 open weights can be served the
+    same way, but this project has not been run against them.
+    """
     if settings.evon_api_url:
         return await _chat_openai_compatible(messages, tools)
     if settings.evon_hf_model:
@@ -43,9 +48,10 @@ async def _chat_openai_compatible(messages: list[dict], tools: list[dict] | None
         "max_tokens": 300,
     }
     if tools:
-        payload["tools"] = [
-            {"type": "function", "function": t} for t in tools
-        ]
+        payload["tools"] = [{"type": "function", "function": t} for t in tools]
+        # Groq's GPT-OSS models reject tool calling unless the reasoning trace is
+        # parsed or hidden; harmless on endpoints that ignore unknown fields.
+        payload["reasoning_format"] = "hidden"
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(settings.evon_api_url, headers=headers, json=payload)
         resp.raise_for_status()

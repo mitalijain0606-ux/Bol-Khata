@@ -371,7 +371,10 @@ async def evon_reply(text: str, sid: int = 1) -> dict | None:
             follow = await evon.chat([
                 {"role": "user", "content": text},
                 msg,
-                {"role": "tool", "content": json.dumps(result, ensure_ascii=False)},
+                # tool_call_id is required by OpenAI-compatible APIs; without it
+                # the follow-up call 400s and the reply stays unphrased.
+                {"role": "tool", "tool_call_id": call.get("id", ""),
+                 "name": fn, "content": json.dumps(result, ensure_ascii=False)},
             ])
             phrased = follow["choices"][0]["message"].get("content", "").strip()
             if phrased:
@@ -386,12 +389,20 @@ async def evon_reply(text: str, sid: int = 1) -> dict | None:
         return None
 
 
+# Money-destroying or advice intents never go to the LLM: the rule engine owns
+# the confirmation step, the undo and the lend verdict, so a hallucinated tool
+# call can't wipe a balance or invent a recommendation.
+_RULES_ONLY = {"SETTLE", "UNDO", "LEND"}
+
+
 async def handle_utterance(text: str, lang: str = "hi-IN", sid: int = 1) -> dict:
-    """Main entry: brain decides who answers."""
+    """Main entry: the rule engine owns risky intents, the LLM handles the rest."""
     if evon_settings_ready():
-        result = await evon_reply(text, sid)
-        if result:
-            return {**result, "brain": "evon"}
+        intent = nlu.classify(nlu.transliterate(text), lang)
+        if intent not in _RULES_ONLY and sid not in _PENDING_SETTLE:
+            result = await evon_reply(text, sid)
+            if result:
+                return {**result, "brain": "llm"}
     return {**rule_reply(text, lang, sid), "brain": "rules"}
 
 

@@ -26,7 +26,7 @@ async def main():
     print(f"Mode: {settings.mode.upper()}")
     print(f"STT configured : {settings.stt_configured}")
     print(f"TTS configured : {settings.tts_configured}")
-    print(f"LLM configured: {settings.evon_configured}")
+    print(f"LLM configured: {settings.evon_configured}  ({settings.llm_label})")
 
     if settings.stt_configured:
         try:

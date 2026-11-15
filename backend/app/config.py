@@ -37,11 +37,12 @@ class Settings:
     ]
     stt_lang: str = _env("STT_LANG", "hi-IN")
 
-    # --- Reasoning LLM ---
-    evon_api_url: str = _env("EVON_API_URL")
-    evon_api_key: str = _env("EVON_API_KEY")
-    evon_model: str = _env("EVON_MODEL", "evon-v3.3")
-    evon_hf_model: str = _env("EVON_HF_MODEL")
+    # --- Reasoning LLM (any OpenAI-compatible endpoint) ---
+    # LLM_* is the current spelling; the older EVON_* names still work.
+    evon_api_url: str = _env("LLM_API_URL") or _env("EVON_API_URL")
+    evon_api_key: str = _env("LLM_API_KEY") or _env("EVON_API_KEY")
+    evon_model: str = _env("LLM_MODEL") or _env("EVON_MODEL", "openai/gpt-oss-20b")
+    evon_hf_model: str = _env("LLM_HF_MODEL") or _env("EVON_HF_MODEL")
 
     # --- Voice lock ---
     voice_lock_enabled: bool = _env("VOICE_LOCK_ENABLED", "1") == "1"
@@ -58,6 +59,16 @@ class Settings:
     @property
     def evon_configured(self) -> bool:
         return bool(self.evon_api_url or self.evon_hf_model)
+
+    @property
+    def llm_label(self) -> str:
+        """What the reasoning brain actually is, for honest reporting in the UI,
+        the health check and the README. Never guess a vendor we are not calling."""
+        if not self.evon_configured:
+            return "rule engine (no LLM configured)"
+        host = (self.evon_api_url or "").split("/")[2] if "//" in self.evon_api_url else ""
+        vendor = {"api.groq.com": "Groq"}.get(host, host or "Hugging Face")
+        return f"{self.evon_model} via {vendor}"
 
     @property
     def mode(self) -> str:

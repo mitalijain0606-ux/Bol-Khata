@@ -218,3 +218,70 @@ class API(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LLMRouting(unittest.TestCase):
+    """MOCKED LLM — no network. Checks our side of the contract only: the
+    request shape Groq needs, and that risky intents never reach the LLM."""
+
+    def setUp(self):
+        import asyncio
+        from app.agent import agent
+        from app.speech import evon
+        self.asyncio, self.agent, self.evon = asyncio, agent, evon
+        self.calls = []
+
+        async def fake_chat(messages, tools=None):
+            self.calls.append({"messages": messages, "tools": tools})
+            if tools:   # first turn: ask for a balance lookup
+                return {"choices": [{"message": {"role": "assistant", "content": None, "tool_calls": [{
+                    "id": "call_1", "type": "function",
+                    "function": {"name": "query_balance", "arguments": '{"customer_name": "Sharma"}'}}]}}]}
+            return {"choices": [{"message": {"role": "assistant", "content": "Sharma ji ka baki bata diya."}}]}
+
+        self._orig_chat, self._orig_ready = evon.chat, agent.evon_settings_ready
+        evon.chat = fake_chat
+        agent.evon_settings_ready = lambda: True
+
+    def tearDown(self):
+        self.evon.chat, self.agent.evon_settings_ready = self._orig_chat, self._orig_ready
+
+    def run_(self, text):
+        return self.asyncio.run(self.agent.handle_utterance(text, "hi-IN", 1))
+
+    def test_llm_handles_safe_intents_and_sends_tool_call_id(self):
+        r = self.run_("Sharma ji ka kitna baki hai")
+        self.assertEqual((r["brain"], r["action"]), ("llm", "BALANCE"))
+        tool_msg = self.calls[1]["messages"][-1]
+        self.assertEqual((tool_msg["role"], tool_msg["tool_call_id"]), ("tool", "call_1"))
+
+    def test_risky_intents_stay_on_rules(self):
+        for text, action in [("Sharma ji ka hisaab clear kar do", "CONFIRM_SETTLE"),
+                             ("nahi", "CANCELLED"),
+                             ("Sharma ji ko 2000 udhaar du kya", "LEND_ADVICE")]:
+            r = self.run_(text)
+            self.assertEqual((r["brain"], r["action"]), ("rules", action), text)
+        self.assertEqual(self.calls, [])          # the LLM was never asked
+
+    def test_groq_payload_hides_reasoning_with_tools(self):
+        import httpx
+        from app.config import settings
+        sent = {}
+
+        class FakeClient:
+            def __init__(self, *a, **k): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *a): return False
+            async def post(self, url, headers=None, json=None):
+                sent.update(json)
+                return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]},
+                                      request=httpx.Request("POST", url))
+
+        orig_client, orig_url = self.evon.httpx.AsyncClient, settings.evon_api_url
+        self.evon.httpx.AsyncClient, settings.evon_api_url = FakeClient, "https://api.groq.com/openai/v1/chat/completions"
+        try:
+            self.asyncio.run(self._orig_chat([{"role": "user", "content": "hi"}], tools=[{"name": "x", "parameters": {}}]))
+        finally:
+            self.evon.httpx.AsyncClient, settings.evon_api_url = orig_client, orig_url
+        self.assertEqual(sent["reasoning_format"], "hidden")
+        self.assertEqual(sent["tools"][0]["type"], "function")
